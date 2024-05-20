@@ -1,0 +1,3 @@
+[submodule "GenshinDialog"]
+	path = GenshinDialog
+	url = https://github.com/mrzjy/GenshinDialog.git
