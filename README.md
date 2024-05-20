@@ -44,4 +44,4 @@ python test.py
 1. catch genshin data flow
 2. AI screen text capture
 
-###如果有想法可以告訴我！！
+### 如果有想法可以告訴我！！
