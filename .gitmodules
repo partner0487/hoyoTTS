@@ -1,3 +1,11 @@
 [submodule "GenshinDialog"]
 	path = GenshinDialog
 	url = https://github.com/mrzjy/GenshinDialog.git
+
+[submodule "parrots"]
+	path = parrots
+	url = https://github.com/shibing624/parrots.git
+
+[submodule "AnimeGameData"]
+	path = AnimeGameData
+	url = https://gitlab.com/Dimbreath/AnimeGameData.git
