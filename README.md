@@ -1,18 +1,18 @@
-#genshin_dialog_TTS
+# genshin_dialog_TTS
 導入劇情文本，並藉由AI配音，將文本轉成語音
 
-##Motivation
+## Motivation
 其實原神中有許多支線劇情都不錯，但沒有配音
 1. 對不識字亦或是盲人來說都不太友善
 2. 是過程中的乏味會使人缺少動力
 
-##Description
-###參考
+## Description
+### Reference
 AI 語音來源：[parrots](https://github.com/shibing624/parrots.git)
 劇情文本來源：[AnimeGameData](https://gitlab.com/Dimbreath/AnimeGameData)
 劇情文本轉換：[GenshinDialog](https://github.com/mrzjy/GenshinDialog.git)
 
-###安裝：
+### Install：
 ```shell
 pip install torch
 git clone --recurse-submodules https://github.com/partner0487/genshin_dialog_TTS.git
@@ -39,7 +39,7 @@ cd ..
 python test.py
 ```
 
-##Future
+## Future
 及時抓取劇情文字，並將其轉成語音，可能方向：
 1. catch genshin data flow
 2. AI screen text capture
