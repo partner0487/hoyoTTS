@@ -8,9 +8,9 @@
 
 ## Description
 ### Reference
-AI 語音來源：[parrots](https://github.com/shibing624/parrots.git)
-劇情文本來源：[AnimeGameData](https://gitlab.com/Dimbreath/AnimeGameData)
-劇情文本轉換：[GenshinDialog](https://github.com/mrzjy/GenshinDialog.git)
+AI 語音來源：[parrots](https://github.com/shibing624/parrots.git)\n
+劇情文本來源：[AnimeGameData](https://gitlab.com/Dimbreath/AnimeGameData)\n
+劇情文本轉換：[GenshinDialog](https://github.com/mrzjy/GenshinDialog.git)\n
 
 ### Install：
 ```shell
