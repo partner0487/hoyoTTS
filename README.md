@@ -33,7 +33,7 @@ python extract_dialogs.py --repo=../AnimeGameData --lang=CHT
 cd ..
 ```
 
-我撰寫了一個模板可以TTS jsonl檔的文本，並自動撥放
+我撰寫了一個模板可以TTS jsonl檔的文本，並自動撥放 \
 語音檔會存放在 output_audio.wav
 ```python
 python test.py
