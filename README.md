@@ -10,7 +10,7 @@
 ### Reference
 AI 語音來源：[parrots](https://github.com/shibing624/parrots.git) \
 劇情文本來源：[AnimeGameData](https://gitlab.com/Dimbreath/AnimeGameData) \
-劇情文本轉換：[GenshinDialog](https://github.com/mrzjy/GenshinDialog.git) 
+劇情文本轉換來源：[GenshinDialog](https://github.com/mrzjy/GenshinDialog.git) 
 
 ### Install：
 ```shell
