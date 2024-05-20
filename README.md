@@ -42,5 +42,5 @@ python test.py
 ## Future
 及時抓取劇情文字，並將其轉成語音，可能方向：
 1. catch genshin data flow
-2. AI screen text capture
+2. AI screen text capture \
 如果有想法可以告訴我！！
