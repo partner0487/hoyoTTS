@@ -17,3 +17,5 @@ gradio
 pyopenjtalk
 ffprobe
 playsound
+screen-ocr[winrt]
+screen-ocr[easyocr]
