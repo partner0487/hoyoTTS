@@ -9,7 +9,7 @@
 ## Description
 ### Reference
 AI 語音來源：[parrots](https://github.com/shibing624/parrots.git) \
-ORC 文字偵測來源：[screen-ocr](https://github.com/wolfmanstout/screen-ocr) \
+ORC 文字偵測來源：[screen-ocr](https://github.com/wolfmanstout/screen-ocr) 
 
 ### Install：
 ```shell
