@@ -20,7 +20,7 @@ pip install -r requirements.txt
 pip install parrots
 ```
 
-點開遊戲，運行code會抓取螢幕上高度在920~1000位置的文字
+點開遊戲，運行code會抓取螢幕上高度在920~1000位置的文字\
 記得不要擋到文字喔
 ```python
 python main.py
