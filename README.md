@@ -1,4 +1,4 @@
-# genshin_dialog_TTS
+# hoyoTTS
 通過ORC偵測劇情文字和角色，並藉由AI配音，由語音念出劇情
 
 ## Motivation
