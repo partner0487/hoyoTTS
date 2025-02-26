@@ -1,32 +1,94 @@
 # hoyoTTS
-通過ORC偵測劇情文字和角色，並藉由AI配音，由語音念出劇情
 
-## Motivation
-其實原神中有許多支線劇情都不錯，但沒有配音
-1. 對不識字亦或是盲人來說都不太友善
-2. 過程中的乏味會使人缺少動力
+通過 OCR 偵測劇情文字和角色，並藉由 AI 配音，由語音念出劇情。
 
-## Description
-### Reference
-AI 語音來源：[原神、星穹铁道、崩坏3、绝区零、鸣潮TTS（语音合成）AI模型合集](https://www.bilibili.com/read/cv26659988/) \
-ORC 文字偵測來源：[screen-ocr](https://github.com/wolfmanstout/screen-ocr) 
+---
 
-### Install：
-```shell
-git clone https://github.com/partner0487/genshin_dialog_TTS.git
-cd genshin_dialog_TTS
-pip install -r requirements.txt
-```
+## 動機
 
-點開遊戲，運行code會抓取螢幕上的文字\
-記得不要擋到文字喔(目前僅支援全螢幕)
-```python
-python main.py
-```
+在原神等遊戲中，許多支線劇情沒有配音，這對以下群體不太友善：
+1. **不識字或視障玩家**：無法閱讀劇情文字。
+2. **普通玩家**：長時間閱讀文字容易感到乏味，降低遊戲動力。
 
-## Future
-大致功能已成形，再來是優化
-1. 實際遊戲測試，目前僅支援圖片
-2. 背景自動化運行
+hoyoTTS 旨在解決這些問題，通過自動偵測劇情文字並生成 AI 配音，讓玩家以聽覺享受遊戲劇情。
 
-### 如果有想法可以告訴我！！
+---
+
+## 功能
+
+- **OCR 文字偵測**：自動偵測遊戲畫面中的劇情文字。
+- **AI 語音合成**：根據偵測到的文字和角色，生成對應的 AI 配音。
+- **背景運行**：支持在遊戲過程中自動運行，無需手動操作。
+
+---
+
+## 安裝與使用
+
+### 依賴安裝
+
+1. **克隆專案**：
+   ```bash
+   git clone https://github.com/partner0487/genshin_dialog_TTS.git
+   cd genshin_dialog_TTS
+   ```
+
+2. **安裝依賴**：
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+### 運行專案
+
+1. **啟動遊戲**
+2. **運行 hoyoTTS**：
+   ```bash
+   python main.py
+   ```
+3. **注意事項**：
+   - 請勿遮擋遊戲畫面中的劇情文字。
+   - 目前僅支持全螢幕模式。
+
+---
+
+## 技術細節
+
+### OCR 文字偵測
+
+- **工具**：使用 [screen-ocr](https://github.com/wolfmanstout/screen-ocr) 進行螢幕文字偵測。
+- **原理**：通過截取遊戲畫面並分析文字區域，提取劇情文字。
+
+### AI 語音合成
+
+- **模型來源**：使用 [原神、星穹铁道、崩坏3、绝区零、鸣潮TTS（语音合成）AI模型合集](https://www.bilibili.com/read/cv26659988/) 提供的 AI 語音模型。
+- **角色識別**：根據劇情文字中的角色名稱，選擇對應的語音模型進行合成。
+
+---
+
+## 未來計劃
+
+1. **實際遊戲測試**：
+   - 目前僅支持圖片測試，未來將擴展到實際遊戲場景。
+   
+2. **背景自動化運行**：
+   - 實現專案在背景自動運行，無需手動啟動。
+
+3. **多語言支持**：
+   - 支持更多語言的劇情文字偵測和語音合成。
+
+4. **用戶界面**：
+   - 開發圖形化界面，方便用戶設置和操作。
+
+---
+
+## 貢獻
+
+歡迎提交 Issue 或 Pull Request 來改進此專案！  
+如果有任何想法或建議，請聯繫：  
+- 電子郵件：partner0487@gmail.com  
+- GitHub：[partner0487](https://github.com/partner0487)
+
+---
+
+## 授權
+
+此專案採用 [MIT 授權](LICENSE)。
