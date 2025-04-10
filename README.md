@@ -28,8 +28,8 @@ hoyoTTS 旨在解決這些問題，通過自動偵測劇情文字並生成 AI �
 
 1. **克隆專案**：
    ```bash
-   git clone https://github.com/partner0487/genshin_dialog_TTS.git
-   cd genshin_dialog_TTS
+   git clone https://github.com/partner0487/hoyoTTS.git
+   cd hoyoTTS
    ```
 
 2. **安裝依賴**：
