@@ -503,9 +503,11 @@ class App:
                 d = self.engine.library.dir
                 on_disk = sum(1 for x in os.listdir(d) if not x.startswith(".")) if os.path.isdir(d) else 0
             except OSError:
-                on_disk = n
-            if on_disk != n:
+                on_disk = -1
+            # 跟上次掃描比（不是跟可用模型數比：少數上游模型缺檔，資料夾數會一直比可用數多）
+            if on_disk != getattr(self, "_last_on_disk", on_disk):
                 self._reload_voices()
+            self._last_on_disk = on_disk
         unmatched = [f"{k}（{c} 次）" for k, c in sorted(self.engine.unmatched.items(), key=lambda x: -x[1])]
         if list(self.lb_unmatched.get(0, "end")) != unmatched:
             self.lb_unmatched.delete(0, "end")

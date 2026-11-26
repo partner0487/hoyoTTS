@@ -179,9 +179,11 @@ def download_many(models: Iterable[RemoteModel], models_dir: str, workers: int =
 
 
 def find_local(dir_: str, name: str) -> str | None:
+    """已下載的角色資料夾（不保證能用：上游有少數 zip 缺 SoVITS 權重，例如「塔杰·拉德卡尼」，
+    這種載入時會被 load_voice 略過，但不該每次都重新下載）。"""
     for cand in (f"{name}_ZH", name):
         p = os.path.join(dir_, cand)
-        if os.path.isdir(p) and any(f.endswith(".pth") for f in os.listdir(p)):
+        if os.path.isdir(p) and any(f.endswith((".pth", ".ckpt")) for f in os.listdir(p)):
             return p
     return None
 
