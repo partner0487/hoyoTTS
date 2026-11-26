@@ -78,6 +78,8 @@ python -m hoyotts.voices 派蒙 空 旁白  # 只下載指定角色（簡體名�
 
 ## 使用
 
+雙擊 `run.bat`，或：
+
 ```powershell
 conda activate hoyoTTS
 python main.py
