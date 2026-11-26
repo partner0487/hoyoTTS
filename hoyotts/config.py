@@ -14,7 +14,6 @@ DEFAULTS: dict = {
     "models_dir": r"D:\hoyoTTS_models",
     "game": "原神",
     "lang": "中文",
-    "window_title": "原神",
     "process_name": "GenshinImpact.exe",
     "server": {"host": "127.0.0.1", "port": 9880, "autostart": True},
     "voices": {

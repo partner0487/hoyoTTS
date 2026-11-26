@@ -18,6 +18,12 @@ import requests
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GSV = os.path.join(ROOT, "GPT-SoVITS")
+PRETRAINED = os.path.join(GSV, "GPT_SoVITS", "pretrained_models")
+# v4 推理用不到：v1/v2/v3/v2Pro 底模、v3 的 BigVGAN、v2Pro 的說話人驗證模型
+UNUSED_PRETRAINED = [
+    "s2D488k.pth", "s2G488k.pth", "s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt", "s2Gv3.pth",
+    "gsv-v2final-pretrained", "v2Pro", "sv", "models--nvidia--bigvgan_v2_24khz_100band_256x",
+]
 SOURCES = {
     "HF": "https://huggingface.co/XXXXRT/GPT-SoVITS-Pretrained/resolve/main/",
     "HF-Mirror": "https://hf-mirror.com/XXXXRT/GPT-SoVITS-Pretrained/resolve/main/",
@@ -59,7 +65,8 @@ def main() -> None:
     tmp = tempfile.mkdtemp()
     try:
         steps = [
-            ("pretrained_models.zip", os.path.join(GSV, "GPT_SoVITS"), os.path.join(GSV, "GPT_SoVITS", "pretrained_models", "sv")),
+            ("pretrained_models.zip", os.path.join(GSV, "GPT_SoVITS"),
+             os.path.join(PRETRAINED, "gsv-v4-pretrained", "s2Gv4.pth")),
             ("G2PWModel.zip", os.path.join(GSV, "GPT_SoVITS", "text"), os.path.join(GSV, "GPT_SoVITS", "text", "G2PWModel")),
             ("nltk_data.zip", sys.prefix, os.path.join(sys.prefix, "nltk_data")),
         ]
@@ -70,6 +77,17 @@ def main() -> None:
             p = os.path.join(tmp, name)
             fetch(base + name, p)
             unzip(p, dest)
+            os.remove(p)
+
+        # 角色模型全是 v4，其他版本的底模用不到（約 2.5GB）
+        for x in UNUSED_PRETRAINED:
+            p = os.path.join(PRETRAINED, x)
+            if os.path.isdir(p):
+                shutil.rmtree(p)
+                print(f"刪除用不到的底模 {x}")
+            elif os.path.isfile(p):
+                os.remove(p)
+                print(f"刪除用不到的底模 {x}")
 
         import pyopenjtalk
 

@@ -68,7 +68,6 @@ class EngineState:
     name: str = ""
     text: str = ""
     options: list[str] = field(default_factory=list)
-    voice: str = ""
     speaking: str = ""
 
 

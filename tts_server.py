@@ -25,7 +25,26 @@ import GPT_SoVITS.Accel.PyTorch  # noqa: E402,F401  在 import 時把 benchmark 
 
 torch.backends.cudnn.benchmark = False
 
-sys.argv = [os.path.join(GSV_DIR, "api_v2.py")] + sys.argv[1:]
+# 角色模型都是 v4，啟動時直接載 v4 底模（GPT-SoVITS 預設會先載 v2）。
+# 設定檔放在專案根目錄、不放進 git。api_v2 切換角色時會把路徑改寫成該角色的權重，
+# 所以每次啟動都重寫，免得那個角色的模型被刪掉後伺服器起不來。
+CONFIG = os.path.join(os.path.dirname(GSV_DIR), "tts_infer.yaml")
+with open(CONFIG, "w", encoding="utf-8") as f:
+    f.write(
+        "custom:\n"
+        "  bert_base_path: GPT_SoVITS/pretrained_models/chinese-roberta-wwm-ext-large\n"
+        "  cnhuhbert_base_path: GPT_SoVITS/pretrained_models/chinese-hubert-base\n"
+        f"  device: {'cuda' if torch.cuda.is_available() else 'cpu'}\n"
+        f"  is_half: {'true' if torch.cuda.is_available() else 'false'}\n"
+        "  t2s_weights_path: GPT_SoVITS/pretrained_models/s1v3.ckpt\n"
+        "  version: v4\n"
+        "  vits_weights_path: GPT_SoVITS/pretrained_models/gsv-v4-pretrained/s2Gv4.pth\n"
+    )
+args = sys.argv[1:]
+if "-c" not in args and "--tts_config" not in args:
+    args = ["-c", CONFIG] + args
+
+sys.argv = [os.path.join(GSV_DIR, "api_v2.py")] + args
 # 不用 run_name="__main__"，這樣 api_v2 只會建好 APP 與模型、不會自己啟動 uvicorn，
 # 讓我們先加上 /stop 再啟動。
 g = runpy.run_path(sys.argv[0], run_name="hoyotts_api_v2")

@@ -134,8 +134,3 @@ class Player:
     def busy(self) -> bool:
         return time.time() < self._end
 
-    def wait(self, stop: threading.Event | None = None) -> None:
-        while self.busy():
-            if stop is not None and stop.is_set():
-                return
-            time.sleep(0.05)

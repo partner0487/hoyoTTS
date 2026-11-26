@@ -11,7 +11,6 @@ import ctypes
 import ctypes.wintypes as W
 import os
 import threading
-import time
 
 import numpy as np
 
@@ -79,7 +78,6 @@ class GameCapture:
         self.active_backend = ""
         self._frame: np.ndarray | None = None  # BGRA 或 RGB，見 _frame_is_bgra
         self._frame_is_bgra = False
-        self._frame_time = 0.0
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -156,7 +154,6 @@ class GameCapture:
             with self._lock:
                 self._frame = buf.copy()
                 self._frame_is_bgra = True
-                self._frame_time = time.time()
 
         @cap.event
         def on_closed():
