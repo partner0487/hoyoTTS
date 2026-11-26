@@ -299,10 +299,10 @@ class App:
             self.e_dir.delete(0, "end")
             self.e_dir.insert(0, os.path.normpath(d))
 
-    def _reload_voices(self, from_entry: bool = False):
+    def _reload_voices(self, from_entry: bool = False, quiet: bool = False):
         if from_entry:  # 「重新載入模型」按鈕：套用輸入框裡的資料夾
             self.cfg["models_dir"] = self.e_dir.get().strip()
-        self.engine.reload_voices()
+        self.engine.reload_voices(quiet=quiet)
         names = self.engine.library.names()
         for cb in [*self.voice_combos.values(), self.cb_alias, self.cb_test]:
             cb.config(values=names)
@@ -506,7 +506,7 @@ class App:
                 on_disk = -1
             # 跟上次掃描比（不是跟可用模型數比：少數上游模型缺檔，資料夾數會一直比可用數多）
             if on_disk != getattr(self, "_last_on_disk", on_disk):
-                self._reload_voices()
+                self._reload_voices(quiet=True)
             self._last_on_disk = on_disk
         unmatched = [f"{k}（{c} 次）" for k, c in sorted(self.engine.unmatched.items(), key=lambda x: -x[1])]
         if list(self.lb_unmatched.get(0, "end")) != unmatched:

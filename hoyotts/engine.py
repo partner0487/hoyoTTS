@@ -48,6 +48,20 @@ def same_line(a: tuple | None, b: tuple) -> bool:
     return a is not None and a[0] == b[0] and _similar(a[1], b[1]) >= 85
 
 
+def same_options(a: list[str] | None, b: list[str], strict: bool = False) -> bool:
+    """是不是同一組對話選項。選項背後是亮色場景時 OCR 偶爾會整個漏掉一項，
+    所以不比整串字：較少的那組每一項都要在另一組找到相似的（≥80）。
+    strict（判斷畫面穩定用）要求數量相同；比對已念過的時候容許差一項。"""
+    if a is None:
+        return False
+    if not a or not b:
+        return not a and not b
+    if abs(len(a) - len(b)) > (0 if strict else 1):
+        return False
+    small, big = (a, b) if len(a) <= len(b) else (b, a)
+    return all(max(_similar(s, x) for x in big) >= 80 for s in small)
+
+
 @dataclass
 class Utterance:
     kind: str  # "line" / "options" / "test"
@@ -173,9 +187,10 @@ class Engine:
         self.interrupt()
         self._enqueue(Utterance("test", voice_name, text, v, self._gen))
 
-    def reload_voices(self) -> None:
+    def reload_voices(self, quiet: bool = False) -> None:
         self.library = VoiceLibrary(self.cfg["models_dir"], self.cfg["game"], self.cfg["lang"], self.cfg.get("aliases"))
-        self.log(f"已載入 {len(self.library.names())} 個角色模型")
+        if not quiet:
+            self.log(f"已載入 {len(self.library.names())} 個角色模型")
 
     # ---------- 角色 → 聲音 ----------
     def resolve_voice(self, name: str, record: bool = False) -> tuple[Voice | None, str]:
@@ -205,9 +220,10 @@ class Engine:
         self.client.loaded = None  # 伺服器可能是新的，強制重載權重
         self.state.server = "就緒"
         self._server_ready.set()
-        # 暖機：第一次合成要多花好幾秒，先用後備聲音跑一次
+        # 暖機：第一次合成要多花好幾秒，先用後備聲音跑一次。
+        # 已經有台詞在排隊就不用了，直接合成那句（同時暖機會互搶 GPU，反而更慢）。
         v = self.library.get(self.cfg["voices"]["fallback"])
-        if v:
+        if v and self._q.empty():
             try:
                 t = time.time()
                 self.client.synth("你好。", v)
@@ -245,14 +261,14 @@ class Engine:
                             spoken_key = key
                             spoken_opts = None  # 新台詞之後的選項要重新念
                             self._on_line(st.name, st.text)
-                        okey = ("", "／".join(st.options))
-                        opt_count = opt_count + 1 if is_stable(last_opts, okey) else 1
+                        okey = list(st.options)
+                        opt_count = opt_count + 1 if same_options(last_opts, okey, strict=True) else 1
                         last_opts = okey
                         if opt_count >= self.cfg["stable_frames"]:
-                            if st.options and not same_line(spoken_opts, okey):
+                            if okey and not same_options(spoken_opts, okey):
                                 spoken_opts = okey
-                                self._on_options(st.options)
-                            elif not st.options:
+                                self._on_options(okey)
+                            elif not okey:
                                 spoken_opts = None
             except Exception:
                 self.log("畫面辨識錯誤：\n" + traceback.format_exc(limit=3))
