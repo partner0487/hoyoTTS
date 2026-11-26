@@ -1,8 +1,0 @@
-playsound
-screen-ocr[winrt]
-screen-ocr[easyocr]
-requests
-json
-urllib.request
-opencc-python-reimplemented
-python-dotenv

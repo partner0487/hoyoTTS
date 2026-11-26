@@ -1,67 +1,50 @@
-# Simple script to perform OCR on the current screen contents.
+"""hoyoTTS：擷取原神畫面，OCR 出劇情對話，用本機 GPT-SoVITS 角色語音念出來。
 
-import screen_ocr
-import requests
-import json
-from playsound import playsound 
-import urllib.request
-from opencc import OpenCC
-import os
-from dotenv import load_dotenv
+    python main.py           開啟圖形介面
+    python main.py --nogui   不開介面，直接在終端機執行（Ctrl+C 結束）
+"""
 
-load_dotenv()
-access_token = os.getenv("access_token")
+import argparse
+import sys
+import time
 
-cc = OpenCC('t2s')
-ocr_reader = screen_ocr.Reader.create_quality_reader()
-# To read a cropped region, add bounding_box=(left, top, right, bottom).
-bounding_box=(800, 800, 1020, 890)
-results = ocr_reader.read_screen(bounding_box)
-speaker = results.as_string().replace(" ", "").replace("\n", "")
-if speaker == "青雀":
-    speaker += "【星穹铁道 】"
-else:
-    speaker += "【原神】"
-speaker = cc.convert(speaker)
-print(speaker)
 
-bounding_box=(0, 800, 1920, 980)
-results = ocr_reader.read_screen(bounding_box)
-text = results.as_string().replace(" ", "").replace("\n", "")
-text = cc.convert(text)
-print(text)
+def run_headless() -> None:
+    from hoyotts.config import load_config
+    from hoyotts.engine import Engine
+    from hoyotts.hotkeys import GlobalHotkeys
 
-url = 'https://infer.acgnai.top/infer/gen'
-headers = {
-    "content-type": "application/json"
-}
-payload = {
-        "access_token": access_token,
-        "type": "tts",
-        "brand": "gpt-sovits",
-        "name": "anime",
-        "method": "api",
-        "prarm": {
-            "speaker": speaker,
-            "emotion": "开心_happy",
-            "text": text,
-            "text_language":"中文",
-            "text_split_method": "按标点符号切",
-            "fragment_interval": 0.3,
-            "batch_size": 10,
-            "batch_threshold": 0.75,
-            "parallel_infer": True,
-            "split_bucket": True,
-            "top_k": 10,
-            "top_p": 1.0,
-            "temperature": 1.0,
-            "speed_factor": 1.0
-    }
-}
+    cfg = load_config()
+    engine = Engine(cfg)
+    hk = cfg["hotkeys"]
+    hotkeys = GlobalHotkeys()
+    hotkeys.start({hk["stop"]: engine.interrupt, hk["pause"]: lambda: engine.set_paused(not engine.state.paused),
+                   hk["replay"]: engine.replay})
+    print(f"已載入 {len(engine.library.names())} 個角色模型；快捷鍵：停止 {hk['stop']}、暫停 {hk['pause']}、重念 {hk['replay']}")
+    engine.start()
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        hotkeys.stop()
+        engine.shutdown()
 
-res_json = requests.post(url, json.dumps(payload))
-responseData = res_json.json()
-print(f"message: {responseData['message']}")
-print(f"audio: {responseData['audio']}")
-urllib.request.urlretrieve(responseData['audio'], "main.wav")
-playsound("main.wav", block=True)
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--nogui", action="store_true", help="不開介面")
+    args = ap.parse_args()
+    if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if args.nogui:
+        run_headless()
+    else:
+        from hoyotts.ui import run
+
+        run()
+
+
+if __name__ == "__main__":
+    main()
