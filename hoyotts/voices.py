@@ -31,6 +31,12 @@ DEFAULT_GAME = "原神"
 DEFAULT_LANG = "中文"
 
 _SUFFIX_RE = re.compile(r"_(ZH|JA|EN|KO)$")
+
+# 內建別名（key 為 normalize 過的簡體）。使用者在介面設定的別名優先。
+BUILTIN_ALIASES = {
+    "萤": "荧",      # 台灣譯名「螢」轉簡體是「萤」，模型名是「荧」
+    "旅行者": "空",
+}
 _EMOTION_RE = re.compile(r"^【(.+?)】(.*)$")
 
 
@@ -235,22 +241,24 @@ class VoiceLibrary:
     def get(self, name: str) -> Voice | None:
         return self.voices.get(name)
 
-    def match(self, speaker: str, min_score: float = 85) -> Voice | None:
-        """speaker 需為簡體。先查別名、再精確比對、最後模糊比對（容忍 OCR 錯一兩個字）。"""
+    def match(self, speaker: str) -> Voice | None:
+        """speaker 需為簡體。依序：使用者別名 → 內建別名 → 完全相同 → 容忍 OCR 錯一個字。"""
         key = normalize(speaker)
         if not key:
             return None
-        if key in self.aliases:
-            return self.voices.get(self.aliases[key])
+        for table in (self.aliases, BUILTIN_ALIASES):
+            if key in table:
+                return self.voices.get(table[key])
         if key in self._norm:
             return self.voices[self._norm[key]]
-        if len(key) < 2:
+        # 三個字以上的名字，只差一個字（OCR 認錯、多認、少認一字）而且是唯一最接近的才算
+        if len(key) < 3:
             return None
-        from rapidfuzz import fuzz, process
+        from rapidfuzz.distance import Levenshtein
 
-        best = process.extractOne(key, list(self._norm), scorer=fuzz.ratio)
-        if best and best[1] >= min_score:
-            return self.voices[self._norm[best[0]]]
+        close = [n for n in self._norm if abs(len(n) - len(key)) <= 1 and Levenshtein.distance(key, n) <= 1]
+        if len(close) == 1:
+            return self.voices[self._norm[close[0]]]
         return None
 
 
