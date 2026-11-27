@@ -1,4 +1,4 @@
-"""hoyoTTS 圖形介面（tkinter，綠色主題）。"""
+"""hoyoTTS 圖形介面（tkinter，藍粉主題）。"""
 
 from __future__ import annotations
 
@@ -22,29 +22,33 @@ FONT_BIG = (UI_FONT, 13)
 FONT_NAME = (UI_FONT, 13, "bold")
 FONT_TITLE = (UI_FONT, 16, "bold")
 
-# 綠色主題
-BG = "#eef6f0"          # 視窗底色
+# 藍粉主題：藍色為主，粉色點綴（開始按鈕、對話色帶、選項、朗讀中、勾選框）
+BG = "#eef3fb"          # 視窗底色
 CARD = "#ffffff"        # 卡片、分頁內容
-FG = "#1d3326"          # 主要文字
-MUTED = "#5d7465"       # 次要文字
-BORDER = "#c9e0d0"
-GREEN = "#2f8f57"       # 主色
-GREEN_DARK = "#1d5e38"  # 標題列、按下
-GREEN_HOVER = "#3aa366"
-GREEN_SOFT = "#d6eedd"  # 一般按鈕、分頁標籤
-GREEN_SOFT_HOVER = "#c2e5cd"
-HEADER_MUTED = "#b9dcc5"
+FG = "#1c2a40"          # 主要文字
+MUTED = "#5f6f88"       # 次要文字
+BORDER = "#cdd9ee"
+BLUE = "#3b6fd8"        # 主色
+BLUE_DARK = "#24418a"   # 標題列、按下
+BLUE_HOVER = "#4f82e6"
+BLUE_SOFT = "#dce6f8"   # 一般按鈕、分頁標籤
+BLUE_SOFT_HOVER = "#c8d8f4"
+HEADER_MUTED = "#b8c9ee"
+PINK = "#e8739e"        # 點綴色
+PINK_DARK = "#c4507b"
+PINK_HOVER = "#f08bb0"
+PINK_SOFT = "#fbe1ea"
 
-# 標題列上的狀態燈（深綠底）
-OK, WARN, BAD, OFF = "#6ee69a", "#ffd45c", "#ff7b7b", "#86a593"
+# 標題列上的狀態燈（深藍底）
+OK, WARN, BAD, OFF = "#7ee0b0", "#ffd45c", "#ff7b7b", "#8a9cc0"
 
 # 狀態膠囊：狀態 → (底色, 字色, 說明)
 PHASES = {
-    "未啟動": ("#5d7465", "#ffffff", "按「開始」監聽遊戲"),
-    "待機中": ("#2a7347", "#e3f4e8", "等待下一段劇情對話"),
-    "對話中": ("#d6eedd", GREEN_DARK, "辨識台詞中"),
-    "合成中": ("#a8dcb9", GREEN_DARK, "語音合成中…"),
-    "朗讀中": ("#6ee69a", "#0f3520", "快念完時就可以點下一段"),
+    "未啟動": ("#5f6f88", "#ffffff", "按「開始」監聽遊戲"),
+    "待機中": ("#3557a8", "#e4ecfb", "等待下一段劇情對話"),
+    "對話中": (BLUE_SOFT, BLUE_DARK, "辨識台詞中"),
+    "合成中": ("#b9cdf3", BLUE_DARK, "語音合成中…"),
+    "朗讀中": ("#f7a8c4", "#5a1530", "快念完時就可以點下一段"),
     "已暫停": ("#ffd45c", "#4a3a00", "朗讀已暫停"),
 }
 
@@ -55,65 +59,65 @@ def _setup_style(root: tk.Tk) -> None:
     for cls in ("Listbox", "Text", "Entry", "Label", "Button"):
         root.option_add(f"*{cls}.Font", FONT)
     root.option_add("*TCombobox*Listbox.Font", FONT)
-    root.option_add("*TCombobox*Listbox.selectBackground", GREEN)
+    root.option_add("*TCombobox*Listbox.selectBackground", BLUE)
     root.option_add("*TCombobox*Listbox.selectForeground", "#ffffff")
     st = ttk.Style(root)
     st.theme_use("clam")  # clam 才能自訂顏色
     st.configure(".", background=BG, foreground=FG, font=FONT, bordercolor=BORDER, lightcolor=BG,
-                 darkcolor=BG, troughcolor=GREEN_SOFT, focuscolor=GREEN, fieldbackground=CARD,
-                 selectbackground=GREEN, selectforeground="#ffffff")
+                 darkcolor=BG, troughcolor=BLUE_SOFT, focuscolor=BLUE, fieldbackground=CARD,
+                 selectbackground=BLUE, selectforeground="#ffffff")
     st.configure("TFrame", background=BG)
     st.configure("Card.TFrame", background=CARD)
-    st.configure("Header.TFrame", background=GREEN_DARK)
+    st.configure("Header.TFrame", background=BLUE_DARK)
     st.configure("TLabel", background=CARD, foreground=FG)
     st.configure("Muted.TLabel", background=CARD, foreground=MUTED)
-    st.configure("Header.TLabel", background=GREEN_DARK, foreground="#ffffff")
-    st.configure("HeaderMuted.TLabel", background=GREEN_DARK, foreground=HEADER_MUTED)
-    st.configure("Title.TLabel", background=GREEN_DARK, foreground="#ffffff", font=FONT_TITLE)
+    st.configure("Header.TLabel", background=BLUE_DARK, foreground="#ffffff")
+    st.configure("HeaderMuted.TLabel", background=BLUE_DARK, foreground=HEADER_MUTED)
+    st.configure("Title.TLabel", background=BLUE_DARK, foreground="#ffffff", font=FONT_TITLE)
 
-    st.configure("TButton", background=GREEN_SOFT, foreground=GREEN_DARK, bordercolor=BORDER,
-                 lightcolor=GREEN_SOFT, darkcolor=GREEN_SOFT, padding=(12, 6), relief="flat")
-    st.map("TButton", background=[("pressed", BORDER), ("active", GREEN_SOFT_HOVER)],
-           lightcolor=[("active", GREEN_SOFT_HOVER)], darkcolor=[("active", GREEN_SOFT_HOVER)])
-    st.configure("Accent.TButton", background=GREEN, foreground="#ffffff", bordercolor=GREEN_DARK,
-                 lightcolor=GREEN, darkcolor=GREEN, font=(UI_FONT, 11, "bold"), padding=(18, 7))
-    st.map("Accent.TButton", background=[("pressed", GREEN_DARK), ("active", GREEN_HOVER)],
-           lightcolor=[("active", GREEN_HOVER)], darkcolor=[("active", GREEN_HOVER)])
+    st.configure("TButton", background=BLUE_SOFT, foreground=BLUE_DARK, bordercolor=BORDER,
+                 lightcolor=BLUE_SOFT, darkcolor=BLUE_SOFT, padding=(12, 6), relief="flat")
+    st.map("TButton", background=[("pressed", BORDER), ("active", BLUE_SOFT_HOVER)],
+           lightcolor=[("active", BLUE_SOFT_HOVER)], darkcolor=[("active", BLUE_SOFT_HOVER)])
+    st.configure("Accent.TButton", background=PINK, foreground="#ffffff", bordercolor=PINK_DARK,
+                 lightcolor=PINK, darkcolor=PINK, font=(UI_FONT, 11, "bold"), padding=(18, 7))
+    st.map("Accent.TButton", background=[("pressed", PINK_DARK), ("active", PINK_HOVER)],
+           lightcolor=[("active", PINK_HOVER)], darkcolor=[("active", PINK_HOVER)])
 
     st.configure("TNotebook", background=BG, borderwidth=0, bordercolor=BORDER)
-    st.configure("TNotebook.Tab", background=GREEN_SOFT, foreground=GREEN_DARK, padding=(16, 6),
-                 bordercolor=BORDER, lightcolor=GREEN_SOFT)
-    st.map("TNotebook.Tab", background=[("selected", CARD), ("active", GREEN_SOFT_HOVER)],
-           foreground=[("selected", GREEN)], lightcolor=[("selected", CARD)])
+    st.configure("TNotebook.Tab", background=BLUE_SOFT, foreground=BLUE_DARK, padding=(16, 6),
+                 bordercolor=BORDER, lightcolor=BLUE_SOFT)
+    st.map("TNotebook.Tab", background=[("selected", CARD), ("active", BLUE_SOFT_HOVER)],
+           foreground=[("selected", BLUE)], lightcolor=[("selected", CARD)])
     st.configure("TLabelframe", background=CARD, bordercolor=BORDER, lightcolor=CARD, darkcolor=CARD)
-    st.configure("TLabelframe.Label", background=CARD, foreground=GREEN_DARK, font=FONT_BOLD)
+    st.configure("TLabelframe.Label", background=CARD, foreground=BLUE_DARK, font=FONT_BOLD)
     st.configure("TCheckbutton", background=CARD, foreground=FG, indicatorbackground=CARD,
                  indicatorforeground="#ffffff")
     st.map("TCheckbutton", background=[("active", CARD)],
-           indicatorbackground=[("selected", GREEN), ("active", GREEN_SOFT)])
-    st.configure("Bar.TCheckbutton", background=BG, foreground=GREEN_DARK, font=FONT_BOLD)
+           indicatorbackground=[("selected", PINK), ("active", PINK_SOFT)])
+    st.configure("Bar.TCheckbutton", background=BG, foreground=BLUE_DARK, font=FONT_BOLD)
     st.map("Bar.TCheckbutton", background=[("active", BG)])
     st.configure("TEntry", fieldbackground=CARD, bordercolor=BORDER, lightcolor=CARD, padding=4)
-    st.map("TEntry", bordercolor=[("focus", GREEN)], lightcolor=[("focus", GREEN)])
+    st.map("TEntry", bordercolor=[("focus", BLUE)], lightcolor=[("focus", BLUE)])
     for w in ("TCombobox", "TSpinbox"):
-        st.configure(w, fieldbackground=CARD, background=GREEN_SOFT, arrowcolor=GREEN_DARK,
+        st.configure(w, fieldbackground=CARD, background=BLUE_SOFT, arrowcolor=BLUE_DARK,
                      bordercolor=BORDER, lightcolor=CARD, padding=3)
-        st.map(w, bordercolor=[("focus", GREEN)], lightcolor=[("focus", GREEN)],
+        st.map(w, bordercolor=[("focus", BLUE)], lightcolor=[("focus", BLUE)],
                fieldbackground=[("readonly", CARD)], selectbackground=[("readonly", CARD)],
                selectforeground=[("readonly", FG)])
-    st.configure("Horizontal.TProgressbar", background=GREEN, troughcolor=GREEN_SOFT, bordercolor=BORDER,
-                 lightcolor=GREEN, darkcolor=GREEN)
-    st.configure("Horizontal.TScale", background=GREEN, troughcolor=GREEN_SOFT, bordercolor=BORDER,
-                 lightcolor=GREEN, darkcolor=GREEN)
-    st.map("Horizontal.TScale", background=[("active", GREEN_HOVER)])
-    st.configure("Vertical.TScrollbar", background=GREEN_SOFT, troughcolor=CARD, bordercolor=CARD,
-                 arrowcolor=GREEN_DARK, lightcolor=GREEN_SOFT, darkcolor=GREEN_SOFT)
+    st.configure("Horizontal.TProgressbar", background=BLUE, troughcolor=BLUE_SOFT, bordercolor=BORDER,
+                 lightcolor=BLUE, darkcolor=BLUE)
+    st.configure("Horizontal.TScale", background=BLUE, troughcolor=BLUE_SOFT, bordercolor=BORDER,
+                 lightcolor=BLUE, darkcolor=BLUE)
+    st.map("Horizontal.TScale", background=[("active", BLUE_HOVER)])
+    st.configure("Vertical.TScrollbar", background=BLUE_SOFT, troughcolor=CARD, bordercolor=CARD,
+                 arrowcolor=BLUE_DARK, lightcolor=BLUE_SOFT, darkcolor=BLUE_SOFT)
 
 
 def _style_tk(w: tk.Widget) -> None:
     """tk 原生元件（Listbox、Text）配色。"""
     w.configure(bg=CARD, fg=FG, relief="flat", borderwidth=0, highlightthickness=1,
-                highlightbackground=BORDER, highlightcolor=GREEN, selectbackground=GREEN,
+                highlightbackground=BORDER, highlightcolor=BLUE, selectbackground=BLUE,
                 selectforeground="#ffffff")
 
 
@@ -160,7 +164,7 @@ class App:
     # ---------- 版面 ----------
     def _light(self, parent, text):
         f = ttk.Frame(parent, style="Header.TFrame")
-        c = tk.Canvas(f, width=12, height=12, highlightthickness=0, bg=GREEN_DARK)
+        c = tk.Canvas(f, width=12, height=12, highlightthickness=0, bg=BLUE_DARK)
         dot = c.create_oval(1, 1, 11, 11, fill=OFF, outline="")
         c.pack(side="left", padx=(0, 6))
         ttk.Label(f, text=text, style="HeaderMuted.TLabel").pack(side="left")
@@ -170,7 +174,7 @@ class App:
         return c, dot, val
 
     def _build_header(self):
-        """深綠標題列：名稱、目前狀態、三個狀態燈。"""
+        """深藍標題列：名稱、目前狀態、三個狀態燈。"""
         head = ttk.Frame(self.root, style="Header.TFrame", padding=(18, 12, 18, 10))
         head.pack(fill="x")
         top = ttk.Frame(head, style="Header.TFrame")
@@ -203,21 +207,21 @@ class App:
                         command=self._toggle_auto_play).pack(side="right", padx=(0, 14))
 
     def _build_current(self):
-        """目前對話卡片，左邊一條綠色色帶。"""
+        """目前對話卡片，左邊一條粉色色帶。"""
         outer = tk.Frame(self.root, bg=BORDER)
         outer.pack(fill="x", padx=16, pady=(8, 4))
-        tk.Frame(outer, bg=GREEN, width=5).pack(side="left", fill="y")
+        tk.Frame(outer, bg=PINK, width=5).pack(side="left", fill="y")
         box = ttk.Frame(outer, style="Card.TFrame", padding=(14, 10, 14, 12))
         box.pack(side="left", fill="both", expand=True, padx=(0, 1), pady=1)
         top = ttk.Frame(box, style="Card.TFrame")
         top.pack(fill="x")
-        self.v_name = ttk.Label(top, text="—", font=FONT_NAME, foreground=GREEN_DARK)
+        self.v_name = ttk.Label(top, text="—", font=FONT_NAME, foreground=BLUE_DARK)
         self.v_name.pack(side="left")
         self.v_voice = ttk.Label(top, text="", style="Muted.TLabel")
         self.v_voice.pack(side="left", padx=(10, 0))
         self.v_text = ttk.Label(box, text="", font=FONT_BIG, wraplength=900, justify="left")
         self.v_text.pack(fill="x", pady=(6, 0))
-        self.v_opts = ttk.Label(box, text="", foreground=GREEN, wraplength=900, justify="left")
+        self.v_opts = ttk.Label(box, text="", foreground=PINK_DARK, wraplength=900, justify="left")
         self.v_opts.pack(fill="x", pady=(4, 0))
         self.v_speaking = ttk.Label(box, text="", style="Muted.TLabel")
         self.v_speaking.pack(fill="x", pady=(6, 0))
@@ -247,9 +251,9 @@ class App:
         f = self._tab(nb, "紀錄", 8)
         self.t_log = ScrolledText(f, height=12, font=FONT, state="disabled", wrap="word", padx=8, pady=6)
         _style_tk(self.t_log)
-        self.t_log.tag_configure("time", foreground="#8aa394")
-        self.t_log.tag_configure("synth", foreground="#7a9384")
-        self.t_log.tag_configure("opt", foreground=GREEN)
+        self.t_log.tag_configure("time", foreground="#8a97ad")
+        self.t_log.tag_configure("synth", foreground="#7d8aa3")
+        self.t_log.tag_configure("opt", foreground=PINK_DARK)
         self.t_log.pack(fill="both", expand=True)
 
     def _voice_combo(self, parent, value):
@@ -384,7 +388,7 @@ class App:
     def _tab_test(self, nb):
         f = self._tab(nb, "試聽")
         ttk.Label(f, text="輸入文字（繁簡都可以），選一個角色念念看：").pack(anchor="w")
-        self.t_test = tk.Text(f, height=4, wrap="word", font=FONT_BIG, padx=8, pady=6, insertbackground=GREEN)
+        self.t_test = tk.Text(f, height=4, wrap="word", font=FONT_BIG, padx=8, pady=6, insertbackground=BLUE)
         _style_tk(self.t_test)
         self.t_test.insert("1.0", "旅行者，我們快走吧！前面好像有寶箱哦。")
         self.t_test.pack(fill="x", pady=8)

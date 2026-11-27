@@ -16,10 +16,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "assets")
 S = 1024
 
-GREEN = (47, 143, 87)
-GREEN_DARK = (29, 94, 56)
-GREEN_LIGHT = (110, 230, 154)
-GOLD = (236, 190, 72)
+GREEN = (59, 111, 216)      # 主色（藍）
+GREEN_DARK = (36, 65, 138)  # 深藍
+GREEN_LIGHT = (247, 168, 196)  # 點綴（粉）
+GOLD = (240, 139, 176)  # 分隔線改粉色
 WHITE = (255, 255, 255)
 
 
@@ -63,11 +63,12 @@ def design_a():
     d.rounded_rectangle((190, 230, 834, 700), 150, fill=WHITE)
     d.polygon([(300, 640), (250, 830), (450, 690)], fill=WHITE)
     _bars(d, 512, 465, [110, 220, 300, 200, 130], 62, 40, GREEN)
+    d.rounded_rectangle((481, 315, 543, 615), 31, fill=(232, 115, 158))  # 中間那條改粉色
     return img
 
 
 def design_b():
-    """金色對話分隔線＋上方聲波：取自劇情對話框的意象。"""
+    """對話分隔線（粉色）＋上方聲波：取自劇情對話框的意象。"""
     img = _rounded_base()
     d = ImageDraw.Draw(img)
     _bars(d, 512, 420, [120, 230, 330, 400, 330, 230, 120], 54, 34, WHITE)
@@ -83,7 +84,7 @@ def design_b():
 
 def design_c():
     """文字行變成聲波：Text → Speech。"""
-    img = _rounded_base(top=(56, 160, 100), bottom=GREEN_DARK)
+    img = _rounded_base(top=(79, 130, 230), bottom=GREEN_DARK)
     d = ImageDraw.Draw(img)
     # 左邊三行字
     for i, (w, y) in enumerate([(300, 330), (250, 470), (200, 610)]):
@@ -96,7 +97,7 @@ def design_c():
     return img
 
 
-DESIGNS = {"a": ("對話泡泡＋聲波", design_a), "b": ("金色分隔線＋聲波", design_b), "c": ("文字→聲波", design_c)}
+DESIGNS = {"a": ("對話泡泡＋聲波", design_a), "b": ("粉色分隔線＋聲波", design_b), "c": ("文字→聲波", design_c)}
 
 
 def preview(imgs):
@@ -110,13 +111,13 @@ def preview(imgs):
         except OSError:
             pass
     W, H = cell * len(imgs) + 40, 760
-    out = Image.new("RGB", (W, H), (238, 246, 240))
+    out = Image.new("RGB", (W, H), (238, 243, 251))
     d = ImageDraw.Draw(out)
     d.rectangle((0, 430, W, H), fill=(32, 36, 34))
     for i, (key, (label, img)) in enumerate(imgs.items()):
         x0 = 20 + i * cell
         out.paste(img.resize((256, 256), Image.LANCZOS), (x0 + 22, 30), img.resize((256, 256), Image.LANCZOS))
-        d.text((x0 + cell / 2, 320), f"{key.upper()}　{label}", fill=(29, 94, 56), font=font, anchor="mm")
+        d.text((x0 + cell / 2, 320), f"{key.upper()}　{label}", fill=(36, 65, 138), font=font, anchor="mm")
         for row_y in (370, 495):
             x = x0 + 40
             for sz in (64, 32, 16):
