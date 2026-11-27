@@ -775,9 +775,41 @@ def run() -> None:
     root.mainloop()
 
 
+def _taskbar_dpi() -> int:
+    """所有工作列（每個螢幕各一條）裡最高的 DPI。一個視窗只能給一張大圖示，
+    給最大的那個尺寸：最高 DPI 的工作列剛好不用縮放，其他的是縮小（縮小比放大清楚很多）。"""
+    import ctypes
+
+    u32 = ctypes.windll.user32
+    u32.FindWindowExW.restype = ctypes.c_void_p
+    u32.FindWindowExW.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_wchar_p]
+    u32.MonitorFromWindow.restype = ctypes.c_void_p
+    u32.SetThreadDpiAwarenessContext.restype = ctypes.c_void_p
+    # 這個程序是 system DPI aware，查別的螢幕的 DPI 只會拿到系統 DPI：這段暫時切成 per-monitor
+    old = u32.SetThreadDpiAwarenessContext(ctypes.c_void_p(-4))
+    try:
+        dpis = []
+        for cls in ("Shell_TrayWnd", "Shell_SecondaryTrayWnd"):
+            h = None
+            while True:
+                h = u32.FindWindowExW(None, h, cls, None)
+                if not h:
+                    break
+                mon = u32.MonitorFromWindow(ctypes.c_void_p(h), 2)
+                dx, dy = ctypes.c_uint(), ctypes.c_uint()
+                if mon and ctypes.windll.shcore.GetDpiForMonitor(ctypes.c_void_p(mon), 0, ctypes.byref(dx),
+                                                                   ctypes.byref(dy)) == 0:
+                    dpis.append(dx.value)
+        return max(dpis) if dpis else 96
+    finally:
+        if old:
+            u32.SetThreadDpiAwarenessContext(ctypes.c_void_p(old))
+
+
 def set_window_icon(root: tk.Tk, ico: str) -> None:
-    """Tk 只給 Windows 32px 的大圖示，Win11 工作列（100% 縮放是 24px）再自己縮，32→24 縮起來很糊。
-    直接從 .ico 挑剛好工作列大小的那張（ico 裡有為小尺寸另外畫的清楚版本）設成視窗的大圖示。"""
+    """Tk 只給 Windows 32px 的大圖示，工作列再自己縮放（Win11 100% 縮放是 24px、150% 是 36px），
+    縮放比例不是整數就很糊。直接從 .ico 挑剛好工作列大小的那張（ico 裡有為小尺寸另外畫的清楚版本）
+    設成視窗的大圖示；多個螢幕縮放不同時，以最高的為準。"""
     import ctypes
     import sys
 
@@ -787,7 +819,10 @@ def set_window_icon(root: tk.Tk, ico: str) -> None:
         u32 = ctypes.windll.user32
         u32.LoadImageW.restype = ctypes.c_void_p
         u32.SendMessageW.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_void_p, ctypes.c_void_p]
-        dpi = u32.GetDpiForWindow(ctypes.c_void_p(hwnd)) or 96
+        try:
+            dpi = _taskbar_dpi()
+        except Exception:
+            dpi = u32.GetDpiForWindow(ctypes.c_void_p(hwnd)) or 96
         win11 = sys.getwindowsversion().build >= 22000
         big = round((24 if win11 else 32) * dpi / 96)
         small = round(16 * dpi / 96)

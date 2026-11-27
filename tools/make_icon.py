@@ -115,8 +115,9 @@ def icon_small(size):
     return img.resize((size, size), Image.LANCZOS)
 
 
-SMALL = (16, 20, 24, 32, 40)
-ICO_SIZES = (16, 20, 24, 32, 40, 48, 64, 96, 128, 256)
+# 工作列：100% 縮放 24px、125% 30px、150% 36px；標題列 16 / 20 / 24px
+SMALL = (16, 20, 24, 30, 32, 36, 40)
+ICO_SIZES = (16, 20, 24, 30, 32, 36, 40, 48, 64, 96, 128, 256)
 
 
 def frames(img):
