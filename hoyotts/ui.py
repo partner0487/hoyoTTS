@@ -156,8 +156,11 @@ class App:
         root.protocol("WM_DELETE_WINDOW", self.on_close)
         root.after(200, self._tick)
         self.log(f"模型資料夾：{self.cfg['models_dir']}（已下載 {len(self.engine.library.names())} 個角色）")
-        if self.cfg["auto_play"].get("enabled") and self._offer_admin(running=False):
-            return  # 已經用系統管理員身分重開，這個視窗關掉
+        from .gameinput import is_admin
+
+        if not is_admin():
+            # main.py 開啟時已經要求過系統管理員（UAC 按了「否」才會到這裡），不再問一次
+            self.log("⚠ 不是以系統管理員身分執行：遊戲裡的快捷鍵和自動過劇情的點擊會被原神擋掉")
         if self.cfg.get("auto_start", True):
             root.after(300, self.toggle_run)
 
