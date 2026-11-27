@@ -20,12 +20,14 @@ from .voices import Voice
 class TTSServer:
     """用 tts_server.py 在背景啟動 api_v2；如果已經有伺服器在跑就直接用。"""
 
-    def __init__(self, host: str = "127.0.0.1", port: int = 9880, log: Callable[[str], None] = print):
+    def __init__(self, host: str = "127.0.0.1", port: int = 9880, log: Callable[[str], None] = print,
+                 log_name: str = "tts_server.log", label: str = "TTS 伺服器"):
         self.host, self.port = host, port
         self.base = f"http://{host}:{port}"
         self.log = log
+        self.label = label
         self.proc: subprocess.Popen | None = None
-        self.log_path = os.path.join(ROOT, "tts_server.log")
+        self.log_path = os.path.join(ROOT, log_name)
 
     def alive(self) -> bool:
         try:
@@ -35,7 +37,7 @@ class TTSServer:
 
     def start(self, timeout: float = 300) -> bool:
         if self.alive():
-            self.log("TTS 伺服器已在執行")
+            self.log(f"{self.label}已在執行")
             return True
         env = dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
         # conda 環境的 ffmpeg 在 Library\bin，沒用 conda activate 啟動時要自己加
@@ -47,17 +49,17 @@ class TTSServer:
             cwd=ROOT, env=env, stdout=logf, stderr=subprocess.STDOUT,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
-        self.log("啟動 TTS 伺服器中（第一次約 30 秒）…")
+        self.log(f"啟動{self.label}中（第一次約 30 秒）…")
         t0 = time.time()
         while time.time() - t0 < timeout:
             if self.proc.poll() is not None:
-                self.log(f"TTS 伺服器啟動失敗，請看 {self.log_path}")
+                self.log(f"{self.label}啟動失敗，請看 {self.log_path}")
                 return False
             if self.alive():
-                self.log(f"TTS 伺服器已就緒（{time.time() - t0:.0f} 秒）")
+                self.log(f"{self.label}已就緒（{time.time() - t0:.0f} 秒）")
                 return True
             time.sleep(1)
-        self.log("TTS 伺服器啟動逾時")
+        self.log(f"{self.label}啟動逾時")
         return False
 
     def stop(self) -> None:

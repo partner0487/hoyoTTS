@@ -78,6 +78,9 @@ class Utterance:
     gen: int
     note: str = ""
     items: list[str] = field(default_factory=list)  # 選項（kind="options"）
+    # 選項和台詞同時合成時，選項要等這句（台詞）排進播放佇列後才能排，念的順序才不會反過來
+    after: "Utterance | None" = field(default=None, repr=False, compare=False)
+    queued: threading.Event = field(default_factory=threading.Event, repr=False, compare=False)  # 已排進播放或已放棄
 
 
 @dataclass
@@ -114,6 +117,15 @@ class Engine:
         self.library = VoiceLibrary(cfg["models_dir"], cfg["game"], cfg["lang"], cfg.get("aliases"))
         self.server = TTSServer(cfg["server"]["host"], cfg["server"]["port"], log=log)
         self.client = TTSClient(self.server.base)
+        # 第二個伺服器只念選項：一直載著選項的聲音，選項可以跟台詞同時合成，也不用每次在角色和選項聲音之間切換權重
+        self.opt_server = TTSServer(cfg["server"]["host"], cfg["server"].get("options_port", cfg["server"]["port"] + 1),
+                                    log=log, log_name="tts_server_options.log", label="選項 TTS 伺服器")
+        self.opt_client = TTSClient(self.opt_server.base)
+        self._q_opt: queue.Queue[Utterance] = queue.Queue()
+        self._opt_synthesizing = False
+        self._opt_stop_done = threading.Event()
+        self._opt_stop_done.set()
+        self._opt_ready = threading.Event()
         self.player = Player()
         self.capture = GameCapture((cfg["process_name"], "GenshinImpact.exe", "YuanShen.exe"))
         self.reader: DialogueReader | None = None
@@ -149,6 +161,9 @@ class Engine:
             threading.Thread(target=self._speak_loop, name="synth", daemon=True),
             threading.Thread(target=self._play_loop, name="player", daemon=True),
         ]
+        if self.cfg["server"].get("parallel_options", True):
+            self._threads += [threading.Thread(target=self._opt_server_thread, name="opt-server", daemon=True),
+                              threading.Thread(target=self._opt_speak_loop, name="opt-synth", daemon=True)]
         for t in self._threads:
             t.start()
         self.log("開始監聽遊戲畫面")
@@ -168,6 +183,8 @@ class Engine:
         if self.state.running:
             self.stop()
         self.server.stop()
+        self.opt_server.stop()
+        self._opt_ready.clear()
 
     def set_paused(self, paused: bool) -> None:
         self.state.paused = paused
@@ -183,7 +200,7 @@ class Engine:
             if kept:
                 kept.gen = new  # 先改它的 gen 再改全域的，播放執行緒才不會在中間把它當成已取消
             self._gen = new
-            for q in (self._q, self._play_q):
+            for q in (self._q, self._q_opt, self._play_q):
                 while True:
                     try:
                         q.get_nowait()
@@ -192,18 +209,20 @@ class Engine:
             if not kept:
                 self.player.stop()
                 self.state.speaking = ""
-        if self._synthesizing and self._stop_done.is_set():
-            # 伺服器還在合成被打斷的句子，請它停下來，新句子才不用排隊。
-            # _speak_loop 會等這個請求送完才開始合成下一句，避免 /stop 打到新句子。
-            self._stop_done.clear()
+        # 伺服器還在合成被打斷的句子，請它停下來，新句子才不用排隊。
+        # 合成迴圈會等這個請求送完才開始合成下一句，避免 /stop 打到新句子。
+        for busy, done, client in ((self._synthesizing, self._stop_done, self.client),
+                                   (self._opt_synthesizing, self._opt_stop_done, self.opt_client)):
+            if busy and done.is_set():
+                done.clear()
 
-            def send():
-                try:
-                    self.client.stop()
-                finally:
-                    self._stop_done.set()
+                def send(done=done, client=client):
+                    try:
+                        client.stop()
+                    finally:
+                        done.set()
 
-            threading.Thread(target=send, daemon=True).start()
+                threading.Thread(target=send, daemon=True).start()
 
     def replay(self) -> None:
         u = self._last_line
@@ -262,6 +281,27 @@ class Engine:
                 self.log(f"TTS 暖機完成（{time.time() - t:.1f} 秒）")
             except Exception as e:
                 self.log(f"TTS 暖機失敗：{e}")
+
+    def _opt_server_thread(self) -> None:
+        """主伺服器好了以後再開選項專用的伺服器（同時啟動會互搶 GPU 和記憶體），先載好選項的聲音。
+        沒開成功就沿用主伺服器（選項排在台詞後面合成）。"""
+        while not self._server_ready.wait(1):
+            if self._stop.is_set():
+                return
+        v = self.library.get(self.cfg["voices"]["options"])
+        if v is None or self._stop.is_set():
+            return
+        if not self.opt_server.start():
+            self.log("選項 TTS 伺服器沒有啟動，選項改用主伺服器合成")
+            return
+        self.opt_client.loaded = None
+        try:
+            t = time.time()
+            self.opt_client.synth("你好。", v)
+            self.log(f"選項 TTS 伺服器就緒，選項會跟台詞同時合成（暖機 {time.time() - t:.1f} 秒）")
+            self._opt_ready.set()
+        except Exception as e:
+            self.log(f"選項 TTS 伺服器暖機失敗，選項改用主伺服器合成：{e}")
 
     def _watch_loop(self) -> None:
         last_key, count = None, 0
@@ -347,51 +387,83 @@ class Engine:
         if v is None or self.state.paused:
             return
         text = "".join(o if o[-1] in "。！？!?…" else o + "。" for o in options)
-        self._enqueue(Utterance("options", "選項", text, v, self._gen, items=list(options)))  # 不打斷，排在台詞後面
+        last = self._last_line if self._last_line and self._last_line.gen == self._gen else None
+        u = Utterance("options", "選項", text, v, self._gen, items=list(options), after=last)  # 不打斷，排在台詞後面
+        if self._opt_ready.is_set():
+            self._q_opt.put(u)  # 選項專用伺服器：跟台詞同時合成
+        else:
+            self._enqueue(u)
 
     def _enqueue(self, u: Utterance) -> None:
         self._q.put(u)
 
     def _speak_loop(self) -> None:
-        """合成：從 _q 拿句子合成好丟到 _play_q。播放上一句時就先合成下一句（例如選項）。"""
+        """合成台詞：從 _q 拿句子合成好丟到 _play_q。播放上一句時就先合成下一句。"""
+        self._synth_loop(main=True)
+
+    def _opt_speak_loop(self) -> None:
+        """合成選項（選項專用伺服器）：跟台詞同時合成，等台詞排進播放佇列後再排，念的順序不變。"""
+        self._synth_loop(main=False)
+
+    def _set_synth(self, main: bool, busy: bool) -> None:
+        if main:
+            self._synthesizing = busy
+        else:
+            self._opt_synthesizing = busy
+        self.state.synthesizing = self._synthesizing or self._opt_synthesizing
+
+    def _synth_loop(self, main: bool) -> None:
+        q = self._q if main else self._q_opt
+        ready = self._server_ready if main else self._opt_ready
+        stop_done = self._stop_done if main else self._opt_stop_done
         while not self._stop.is_set():
             try:
-                u = self._q.get(timeout=0.2)
+                u = q.get(timeout=0.2)
             except queue.Empty:
                 continue
-            if u.gen != self._gen:
-                continue
-            if not self._server_ready.is_set():
-                self.log("TTS 伺服器還沒好，等待中…")
-                while not self._server_ready.wait(1):
-                    if self._stop.is_set() or u.gen != self._gen:
-                        break
-                if u.gen != self._gen or self._stop.is_set():
-                    continue
-            self._stop_done.wait(3)
-            if u.gen != self._gen:
-                continue
-            if not _SPEAKABLE.search(u.text):
-                # 「……」這種沒有字可念的台詞：不合成，停頓 1 秒（之後照樣自動過劇情）
-                import numpy as np
+            try:
+                self._synth_one(u, main, ready, stop_done)
+            finally:
+                u.queued.set()  # 排進播放了、或放棄了：等它的選項可以排了
 
-                self.log("  ▶ 沒有字可念，停頓 1 秒")
-                self._play_q.put((u, np.zeros(16000, np.float32), 16000))
-                continue
+    def _synth_one(self, u: Utterance, main: bool, ready: threading.Event, stop_done: threading.Event) -> None:
+        if u.gen != self._gen:
+            return
+        if not ready.is_set():
+            self.log("TTS 伺服器還沒好，等待中…")
+            while not ready.wait(1):
+                if self._stop.is_set() or u.gen != self._gen:
+                    return
+        stop_done.wait(3)
+        if u.gen != self._gen:
+            return
+        if not _SPEAKABLE.search(u.text):
+            # 「……」這種沒有字可念的台詞：不合成，停頓 1 秒（之後照樣自動過劇情）
+            import numpy as np
+
+            self.log("  ▶ 沒有字可念，停頓 1 秒")
+            data, sr = np.zeros(16000, np.float32), 16000
+        else:
+            client = self.client if main else self.opt_client
             try:
                 t = time.time()
-                self._synthesizing = self.state.synthesizing = True
-                data, sr = self.client.synth(t2s(u.text), u.voice, self.cfg["speed"], self.cfg["sample_steps"])
+                self._set_synth(main, True)
+                data, sr = client.synth(t2s(u.text), u.voice, self.cfg["speed"], self.cfg["sample_steps"])
             except Exception as e:
                 if u.gen == self._gen:
                     self.log(f"語音合成失敗：{e}")
                     self._stop.wait(1)
-                continue
+                return
             finally:
-                self._synthesizing = self.state.synthesizing = False
+                self._set_synth(main, False)
             if u.gen != self._gen:
-                continue  # 合成期間玩家已經點到下一句
+                return  # 合成期間玩家已經點到下一句
             self.log(f"  ▶ {u.voice.name} 合成 {time.time() - t:.1f} 秒，長度 {len(data) / sr:.1f} 秒")
+        # 選項先合成好了：等台詞排進播放佇列再排，才會先念台詞
+        while u.after is not None and not u.after.queued.wait(0.1):
+            if self._stop.is_set() or u.gen != self._gen:
+                return
+        if u.gen == self._gen:
             self._play_q.put((u, data, sr))
 
     def _play_loop(self) -> None:
@@ -433,7 +505,8 @@ class Engine:
             return
         s = self.state
         if (gen != self._gen or not ap.get("enabled") or s.paused or not s.in_dialogue
-                or not self._q.empty() or not self._play_q.empty() or self._synthesizing or self.player.busy()):
+                or not self._q.empty() or not self._q_opt.empty() or not self._play_q.empty()
+                or self._synthesizing or self._opt_synthesizing or self.player.busy()):
             return
         # 選項泡泡有呼吸動畫，OCR 每隔幾幀會整個讀不到：看最近 1 秒內讀到的選項，不只看這一幀
         t_seen, recent = self._opts_seen

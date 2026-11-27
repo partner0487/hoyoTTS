@@ -15,7 +15,8 @@ DEFAULTS: dict = {
     "game": "原神",
     "lang": "中文",
     "process_name": "GenshinImpact.exe",
-    "server": {"host": "127.0.0.1", "port": 9880, "autostart": True},
+    # parallel_options：另開一個伺服器（port+1）只念選項，選項跟台詞同時合成（多用約 2～3GB 顯示記憶體）
+    "server": {"host": "127.0.0.1", "port": 9880, "autostart": True, "parallel_options": True},
     "voices": {
         "fallback": "空",   # 找不到對應模型的 NPC
         "options": "空",    # 旅行者的對話選項
