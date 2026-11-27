@@ -60,6 +60,29 @@ def is_admin() -> bool:
         return False
 
 
+_instance_mutex = None
+
+
+def already_running() -> bool:
+    """同時開兩個 hoyoTTS 會讀同一個畫面、把同一句送去合成兩次，還在同一個 TTS 伺服器上
+    輪流切換角色權重，每句都慢很多。用具名 mutex 確認只有一個在跑（程序結束時自動釋放）。"""
+    global _instance_mutex
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.CreateMutexW.restype = ctypes.c_void_p
+    _instance_mutex = k32.CreateMutexW(None, False, r"Local\hoyoTTS_single_instance")
+    err = ctypes.get_last_error()
+    # 183：已經有了；5：另一個是系統管理員身分開的，一般權限的程序打不開它
+    return err in (183, 5) or not _instance_mutex
+
+
+def release_instance() -> None:
+    """以系統管理員身分重開前先放掉，新開的才不會以為已經有一個在跑。"""
+    global _instance_mutex
+    if _instance_mutex:
+        ctypes.WinDLL("kernel32").CloseHandle(ctypes.c_void_p(_instance_mutex))
+        _instance_mutex = None
+
+
 def relaunch_as_admin(args: list[str] | None = None, console: bool = False) -> bool:
     """以系統管理員身分重新開啟 hoyoTTS（會跳出 UAC 詢問）。回傳是否成功啟動（使用者按「否」就是 False）。
     介面版用 pythonw.exe 啟動，不會多開一個主控台視窗；console=True（--nogui）用 python.exe。"""

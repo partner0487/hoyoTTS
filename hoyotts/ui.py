@@ -456,7 +456,7 @@ class App:
     def _offer_admin(self, running: bool) -> bool:
         """不是系統管理員時，問要不要以系統管理員身分重開（原神會擋掉一般權限程式的點擊）。
         回傳 True 表示已經重開、這個視窗要關掉。"""
-        from .gameinput import is_admin, relaunch_as_admin
+        from .gameinput import is_admin, relaunch_as_admin, release_instance
 
         if is_admin():
             return False
@@ -469,6 +469,7 @@ class App:
         self.hotkeys.stop()
         if running:
             self.engine.shutdown()
+        release_instance()
         if relaunch_as_admin():
             self.dl_stop.set()
             if not running:

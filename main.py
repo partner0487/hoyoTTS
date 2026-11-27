@@ -30,6 +30,16 @@ def ensure_admin(args: argparse.Namespace) -> bool:
     return False
 
 
+def tell_already_running(nogui: bool) -> None:
+    msg = "hoyoTTS 已經在執行了（可能縮在工作列或其他視窗後面）。\n同時開兩個會互搶語音伺服器，每句都會變很慢。"
+    if nogui:
+        print(msg)
+        return
+    import ctypes
+
+    ctypes.windll.user32.MessageBoxW(None, msg, "hoyoTTS", 0x40)
+
+
 def run_headless() -> None:
     from hoyotts.config import load_config
     from hoyotts.engine import Engine
@@ -61,6 +71,11 @@ def main() -> None:
     if sys.stdout and hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     if ensure_admin(args):
+        return
+    from hoyotts.gameinput import already_running
+
+    if already_running():
+        tell_already_running(args.nogui)
         return
     if args.nogui:
         run_headless()

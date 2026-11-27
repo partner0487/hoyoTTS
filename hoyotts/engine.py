@@ -292,10 +292,12 @@ class Engine:
         self.client.loaded = None  # 伺服器可能是新的，強制重載權重
         self.state.server = "就緒"
         self._server_ready.set()
-        # 暖機：第一次合成要多花好幾秒，先用後備聲音跑一次。
+        # 暖機：剛開的伺服器第一次合成要多花好幾秒，先用後備聲音跑一次。
         # 已經有台詞在排隊就不用了，直接合成那句（同時暖機會互搶 GPU，反而更慢）。
+        # 伺服器本來就在跑（不是這次開的）已經暖過了；再暖機只會多載一次後備聲音（模型在 HDD 上要十幾秒），
+        # 第一句台詞還得排在它後面。
         v = self.library.get(self.cfg["voices"]["fallback"])
-        if v and self._q.empty():
+        if v and self._q.empty() and self.server.proc is not None:
             try:
                 t = time.time()
                 self.client.synth("你好。", v)
@@ -470,6 +472,13 @@ class Engine:
                 self._set_synth(main, True)
                 data, sr = client.synth(t2s(u.text), u.voice, self.cfg["speed"], self.cfg["sample_steps"])
             except Exception as e:
+                if not main and not self.opt_server.alive():
+                    # 選項伺服器掛了（或被別的程式關掉）：之後的選項都改用主伺服器，這組也丟回主佇列
+                    self._opt_ready.clear()
+                    self.log("選項 TTS 伺服器斷線，選項改用主伺服器合成")
+                    if u.gen == self._gen:
+                        self._q.put(u)
+                    return
                 if u.gen == self._gen:
                     self.log(f"語音合成失敗：{e}")
                     self._stop.wait(1)
