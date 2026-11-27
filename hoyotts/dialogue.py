@@ -3,7 +3,7 @@
 版面以 1920×1080 實際截圖量測（其他解析度等比換算）：
 - 角色名：金色字 (248,189,0)，y≈855–890，置中
 - 分隔線：金線，對話時一定在，拿來判斷是否在對話中。兩種版面：
-  - 一般：一整條，y≈898–900、x≈315–1605
+  - 一般：一整條，y≈898–900，長度跟著台詞變（長句 x≈315–1605，短句只有 x≈782–1137）
   - NPC 有稱號（例如「「老庭院餐廳」侍者」）：y≈908–909，稱號壓在線的中間，
     線被切成左右兩段（x≈688–847、1072–1231），長度隨稱號而變
   兩種都以畫面中心左右對稱
@@ -87,6 +87,9 @@ class DialogueReader:
 
         self.ocr = ocr_reader or screen_ocr.Reader.create_quality_reader(resize_factor=2)
         self.ocr_1x = ocr_reader_1x or screen_ocr.Reader.create_quality_reader(resize_factor=1)
+        # is_known(name) → 是不是已知角色（有模型或別名），用來從多個 OCR 結果裡挑名字
+        self.is_known = None
+        self._name_cache: tuple[bytes, str] | None = None
 
     # ---- 座標 ----
     @staticmethod
@@ -114,7 +117,7 @@ class DialogueReader:
 
     def find_divider(self, frame: np.ndarray) -> Divider | None:
         """找金色分隔線：某一列比上下 5px 明顯偏暖（R−B 高）的線段，以畫面中心左右對稱。
-        一整條長線（一般），或中間被稱號切開的左右兩段（有稱號的 NPC）。"""
+        一整條線（一般；長度跟著台詞變，短句只有約 350px），或中間被稱號切開的左右兩段（有稱號的 NPC）。"""
         h, w = frame.shape[:2]
         sy, sx = h / BASE_H, w / BASE_W
         x0, x1 = int(250 * sx), int(1670 * sx)
@@ -132,9 +135,9 @@ class DialogueReader:
             runs = [(a + x0, b + x0) for a, b in self._runs(warm > 40, int(6 * sx)) if b - a >= seg_min]
             if not runs:
                 continue
-            # 一整條：跨過中心、夠長、對稱
+            # 一整條：跨過中心、至少 250px、對稱
             for a, b in runs:
-                if a < cx < b and b - a >= 800 * sx and abs((a + b) / 2 - cx) <= sym_tol:
+                if a < cx < b and b - a >= 250 * sx and abs((a + b) / 2 - cx) <= sym_tol:
                     return Divider(int(round(y / sy)), False)
             # 左右兩段：左段在中心左邊、右段在右邊，外側端點對稱
             left = [r for r in runs if r[1] < cx]
@@ -157,9 +160,44 @@ class DialogueReader:
         gold = (crop[..., 0] > 180) & (crop[..., 1] > 120) & (crop[..., 2] < 120)
         if gold.sum() < 30:
             return ""  # 沒有金色字 = 旁白（沒有角色名）
+        key = np.packbits(gold).tobytes()
+        if self._name_cache and self._name_cache[0] == key:
+            return self._name_cache[1]  # 同一句台詞名字不變，不用每幀重認
+        name = self._ocr_name(gold, crop)
+        self._name_cache = (key, name)
+        return name
+
+    def _ocr_name(self, gold: np.ndarray, crop: np.ndarray) -> str:
+        """Windows OCR 認短名字很不穩（「派蒙」常只認出「蒙」），換幾種前處理各認一次：
+        有已知角色就用它，否則取出現最多次的，同票取較長的。"""
+        from collections import Counter
+
+        from PIL import ImageFilter
+
         # 只留金色字轉成白底黑字，四周留白，否則第一個字常被吃掉
-        mask = np.pad(np.where(gold, 0, 255).astype(np.uint8), 30, constant_values=255)
-        return clean_text("".join(self._ocr_lines(np.stack([mask] * 3, -1))))
+        mask = Image.fromarray(np.where(gold, 0, 255).astype(np.uint8))
+
+        def padded(im: Image.Image, fill) -> np.ndarray:
+            out = Image.new(im.mode, (im.width + 120, im.height + 120), fill)
+            out.paste(im, (60, 60))
+            return np.array(out.convert("RGB"))
+
+        blur = mask.filter(ImageFilter.GaussianBlur(0.8))
+        x3 = mask.resize((mask.width * 3, mask.height * 3), Image.LANCZOS)
+        orig = Image.fromarray(crop.clip(0, 255).astype(np.uint8))
+        tries = [(padded(mask, 255), None), (padded(blur, 255), self.ocr_1x), (padded(x3, 255), None),
+                 (padded(orig, (0, 0, 0)), self.ocr_1x)]
+        cands = []
+        for img, rd in tries:
+            s = clean_text("".join(self._ocr_lines(img, rd)))
+            if s:
+                cands.append(s)
+                if self.is_known and self.is_known(s):
+                    return s
+        if not cands:
+            return ""
+        count = Counter(cands)
+        return max(count, key=lambda s: (count[s], len(s)))
 
     def text_box(self, div: Divider | None) -> list[int]:
         """台詞區域：一般版面用設定值；有稱號時往下移，避開稱號。"""
