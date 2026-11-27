@@ -147,6 +147,7 @@ class App:
                 root.iconbitmap(default=ico)
             except tk.TclError:
                 pass
+            set_window_icon(root, ico)
         root.geometry("1000x780")
         root.minsize(840, 640)
         _setup_style(root)
@@ -772,6 +773,30 @@ def run() -> None:
     root = tk.Tk()
     App(root)
     root.mainloop()
+
+
+def set_window_icon(root: tk.Tk, ico: str) -> None:
+    """Tk 只給 Windows 32px 的大圖示，Win11 工作列（100% 縮放是 24px）再自己縮，32→24 縮起來很糊。
+    直接從 .ico 挑剛好工作列大小的那張（ico 裡有為小尺寸另外畫的清楚版本）設成視窗的大圖示。"""
+    import ctypes
+    import sys
+
+    try:
+        root.update_idletasks()
+        hwnd = int(root.wm_frame(), 16)
+        u32 = ctypes.windll.user32
+        u32.LoadImageW.restype = ctypes.c_void_p
+        u32.SendMessageW.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_void_p, ctypes.c_void_p]
+        dpi = u32.GetDpiForWindow(ctypes.c_void_p(hwnd)) or 96
+        win11 = sys.getwindowsversion().build >= 22000
+        big = round((24 if win11 else 32) * dpi / 96)
+        small = round(16 * dpi / 96)
+        for which, size in ((1, big), (0, small)):  # ICON_BIG、ICON_SMALL
+            h = u32.LoadImageW(None, ico, 1, size, size, 0x10)  # IMAGE_ICON、LR_LOADFROMFILE
+            if h:
+                u32.SendMessageW(ctypes.c_void_p(hwnd), 0x80, ctypes.c_void_p(which), ctypes.c_void_p(h))  # WM_SETICON
+    except Exception:
+        pass
 
 
 def ctypes_dpi() -> None:

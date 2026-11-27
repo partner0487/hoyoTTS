@@ -82,8 +82,50 @@ def icon():
     return img
 
 
+def icon_small(size):
+    """16～40px 用的簡化版：大版的細聲波、陰影和台詞線縮到這麼小會糊成一團。
+    以 24 格為單位設計（Win11 工作列 100% 縮放是 24px），聲波和分隔線都對齊像素格；
+    底色填滿整格、每邊兩條粗聲波、星星和分隔線加粗。先畫 16 倍大再縮小，邊緣才平滑。"""
+    k = 16
+    N = size * k
+    u = N / 24  # 一格
+
+    def U(*v):
+        return [x * u for x in v]
+
+    img = Image.new("RGBA", (N, N), (0, 0, 0, 0))
+    mask = Image.new("L", (N, N), 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, N - 1, N - 1), 5 * u, fill=255)
+    g = Image.new("RGB", (1, N))
+    for y in range(N):
+        t = y / (N - 1)
+        g.putpixel((0, y), tuple(int(a + (b - a) * t) for a, b in zip(BLUE, BLUE_DARK)))
+    body = g.resize((N, N)).convert("RGBA")
+    body.putalpha(mask)
+    img.alpha_composite(body)
+    d = ImageDraw.Draw(img)
+    cy = 10
+    for x0, h in ((5, 8), (2, 4)):  # 由內往外：越外越矮
+        for x in (x0, 24 - x0 - 2):
+            d.rounded_rectangle(U(x, cy - h / 2, x + 2, cy + h / 2), u, fill=WHITE)
+    _star(d, 12 * u, cy * u, 4 * u, WHITE)
+    d.rounded_rectangle(U(3, 17, 9.5, 19), u, fill=PINK)
+    d.rounded_rectangle(U(14.5, 17, 21, 19), u, fill=PINK)
+    d.polygon([tuple(U(12, 15.5)), tuple(U(14, 18)), tuple(U(12, 20.5)), tuple(U(10, 18))], fill=PINK)
+    return img.resize((size, size), Image.LANCZOS)
+
+
+SMALL = (16, 20, 24, 32, 40)
+ICO_SIZES = (16, 20, 24, 32, 40, 48, 64, 96, 128, 256)
+
+
+def frames(img):
+    """每個尺寸各自的圖：小尺寸用簡化版，48px 以上用大版縮小。"""
+    return [icon_small(s) if s in SMALL else img.resize((s, s), Image.LANCZOS) for s in ICO_SIZES]
+
+
 def preview(img):
-    """256px 大圖，以及淺色、深色（工作列）底上的 64 / 32 / 16px。"""
+    """256px 大圖，以及淺色、深色（工作列）底上的 64 / 32 / 24 / 16px。"""
     font = None
     for f in ("msjh.ttc", "msjhbd.ttc"):
         try:
@@ -98,11 +140,11 @@ def preview(img):
     out.paste(big, (22, 22), big)
     for row_y, fg in ((40, (36, 65, 138)), (190, (200, 210, 204))):
         x = 320
-        for sz in (64, 32, 16):
-            small = img.resize((sz, sz), Image.LANCZOS)
+        for sz in (64, 32, 24, 16):
+            small = icon_small(sz) if sz in SMALL else img.resize((sz, sz), Image.LANCZOS)
             out.paste(small, (x, row_y + (64 - sz) // 2), small)
-            x += sz + 40
-        d.text((320, row_y + 78), "64 / 32 / 16px", fill=fg, font=font)
+            x += sz + 24
+        d.text((320, row_y + 78), "64 / 32 / 24 / 16px", fill=fg, font=font)
     return out
 
 
@@ -110,7 +152,8 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     img = icon()
     img.resize((512, 512), Image.LANCZOS).save(os.path.join(OUT, "icon.png"))
-    img.save(os.path.join(OUT, "icon.ico"), sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
+    fr = frames(img)
+    fr[-1].save(os.path.join(OUT, "icon.ico"), sizes=[(s, s) for s in ICO_SIZES], append_images=fr[:-1])
     preview(img).save(os.path.join(OUT, "icon_preview.png"))
     print("已產生 assets/icon.ico、icon.png、icon_preview.png")
 
