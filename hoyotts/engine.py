@@ -268,6 +268,7 @@ class Engine:
         spoken_key = None
         last_opts, opt_count, spoken_opts = None, 0, None
         out_since = opts_gone_since = None
+        opt_since = 0.0
         while not self._stop.is_set():
             t0 = time.time()
             try:
@@ -294,20 +295,31 @@ class Engine:
                             spoken_opts = None  # 新台詞之後的選項要重新念
                             self._on_line(st.name, st.text)
                         okey = list(st.options)
-                        opt_count = opt_count + 1 if same_options(last_opts, okey, strict=True) else 1
-                        last_opts = okey
+                        now = time.time()
                         if okey:
                             opts_gone_since = None
-                            self._opts_seen = (time.time(), okey)
+                            self._opts_seen = (now, okey)
+                            # 穩定：同一組選項（容許偶爾漏讀一項）連續幾幀、而且維持 0.5 秒才念
+                            # （選項有淡入動畫，太早讀會漏掉還沒出現的）；念這段時間讀到最完整的那組
+                            if same_options(last_opts, okey):
+                                opt_count += 1
+                                if (len(okey), sum(map(len, okey))) > (len(last_opts), sum(map(len, last_opts))):
+                                    last_opts = okey
+                            else:
+                                opt_count, opt_since, last_opts = 1, now, okey
+                            best = last_opts
+                            stable = opt_count >= self.cfg["stable_frames"] and now - opt_since >= 0.5
+                            # 念過的那組少了幾項（例如動畫還沒跑完），現在讀到更多：整組重念
+                            new = not same_options(spoken_opts, best) or len(best) > len(spoken_opts or [])
+                            if stable and new:
+                                spoken_opts = best
+                                self._on_options(best)
                         else:
-                            # 選項泡泡有呼吸動畫，OCR 每隔幾幀就會整個讀不到；連續消失 1.5 秒才算選項真的不見了，
-                            # 否則同一組選項會一直重念
-                            opts_gone_since = opts_gone_since or time.time()
-                            if time.time() - opts_gone_since > 1.5:
-                                spoken_opts = None
-                        if okey and opt_count >= self.cfg["stable_frames"] and not same_options(spoken_opts, okey):
-                            spoken_opts = okey
-                            self._on_options(okey)
+                            # 選項泡泡有呼吸動畫，OCR 每隔幾幀就會整個讀不到：這種幀不算進穩定判斷；
+                            # 連續消失 1.5 秒才算選項真的不見了，否則同一組選項會一直重念
+                            opts_gone_since = opts_gone_since or now
+                            if now - opts_gone_since > 1.5:
+                                spoken_opts = last_opts = None
             except Exception:
                 self.log("畫面辨識錯誤：\n" + traceback.format_exc(limit=3))
                 self._stop.wait(1)

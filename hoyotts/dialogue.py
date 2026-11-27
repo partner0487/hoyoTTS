@@ -164,8 +164,10 @@ class DialogueReader:
         return self.find_divider(frame) is not None
 
     def _ocr_lines(self, img: np.ndarray, reader=None) -> list[str]:
+        """OCR 出來的每一行，由上往下排（Windows OCR 回傳的行序不一定是畫面上的順序）。"""
         res = (reader or self.ocr).read_image(Image.fromarray(img))
-        return [_join_words(_fix_dashes(line.words)) for line in res.result.lines]
+        lines = sorted((l for l in res.result.lines if l.words), key=lambda l: min(w.top for w in l.words))
+        return [_join_words(_fix_dashes(line.words)) for line in lines]
 
     def read_name(self, frame: np.ndarray) -> str:
         crop = self._crop(frame, self.regions["name"]).astype(np.int16)
