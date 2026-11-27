@@ -98,7 +98,9 @@ def _setup_style(root: tk.Tk) -> None:
     for w in ("TCombobox", "TSpinbox"):
         st.configure(w, fieldbackground=CARD, background=GREEN_SOFT, arrowcolor=GREEN_DARK,
                      bordercolor=BORDER, lightcolor=CARD, padding=3)
-        st.map(w, bordercolor=[("focus", GREEN)], lightcolor=[("focus", GREEN)])
+        st.map(w, bordercolor=[("focus", GREEN)], lightcolor=[("focus", GREEN)],
+               fieldbackground=[("readonly", CARD)], selectbackground=[("readonly", CARD)],
+               selectforeground=[("readonly", FG)])
     st.configure("Horizontal.TProgressbar", background=GREEN, troughcolor=GREEN_SOFT, bordercolor=BORDER,
                  lightcolor=GREEN, darkcolor=GREEN)
     st.configure("Horizontal.TScale", background=GREEN, troughcolor=GREEN_SOFT, bordercolor=BORDER,
@@ -131,6 +133,12 @@ class App:
         self._phase: str | None = None
 
         root.title("hoyoTTS")
+        ico = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "icon.ico")
+        if os.path.exists(ico):
+            try:
+                root.iconbitmap(default=ico)
+            except tk.TclError:
+                pass
         root.geometry("1000x780")
         root.minsize(840, 640)
         _setup_style(root)
@@ -144,6 +152,8 @@ class App:
         root.protocol("WM_DELETE_WINDOW", self.on_close)
         root.after(200, self._tick)
         self.log(f"模型資料夾：{self.cfg['models_dir']}（已下載 {len(self.engine.library.names())} 個角色）")
+        if self.cfg["auto_play"].get("enabled") and self._offer_admin(running=False):
+            return  # 已經用系統管理員身分重開，這個視窗關掉
         if self.cfg.get("auto_start", True):
             root.after(300, self.toggle_run)
 
@@ -350,11 +360,15 @@ class App:
 
     def _tab_download(self, nb):
         f = self._tab(nb, "模型下載")
-        ttk.Label(f, text="來源：ModelScope aihobbyist/GPT-SoVITS_Model_Collection（原神／中文，CC-BY-NC，禁止商用與二次散布）。"
-                          "每個角色約 200MB，全部約 52GB。已下載的會跳過，中斷後可以續傳。",
+        ttk.Label(f, text="來源：ModelScope aihobbyist/GPT-SoVITS_Model_Collection（中文，CC-BY-NC，禁止商用與二次散布）。"
+                          "每個角色約 200–300MB；原神全部約 56GB、星穹鐵道約 36GB。已下載的會跳過，中斷後可以續傳。",
                   style="Muted.TLabel", wraplength=880).pack(anchor="w")
         row = ttk.Frame(f, style="Card.TFrame")
         row.pack(fill="x", pady=12)
+        ttk.Label(row, text="遊戲：").pack(side="left")
+        self.cb_dl_game = ttk.Combobox(row, values=[V.GAME_LABELS[g] for g in V.GAMES], width=14, state="readonly")
+        self.cb_dl_game.set(V.GAME_LABELS.get(self.cfg["game"], self.cfg["game"]))
+        self.cb_dl_game.pack(side="left", padx=(0, 14))
         self.b_dl_all = ttk.Button(row, text="下載全部", style="Accent.TButton", command=self.download_all)
         self.b_dl_all.pack(side="left")
         ttk.Button(row, text="停止下載", command=self.dl_stop.set).pack(side="left", padx=6)
@@ -403,19 +417,43 @@ class App:
                             hk["replay"]: ui(self.engine.replay)})
 
     def _toggle_auto_play(self):
-        from .gameinput import is_admin
-
         on = self.var_auto_play.get()
         self.cfg["auto_play"]["enabled"] = on
         save_config(self.cfg)
         if on:
             self.log("自動過劇情：開啟（台詞念完自動點擊，選項念完按 "
                      f"{self.cfg['auto_play'].get('option_key', 'F')} 選第一個；遊戲要在前景）")
-            if not is_admin():
-                self.log("⚠ hoyoTTS 不是以系統管理員身分執行，原神會擋掉自動點擊。"
-                         "請關掉後在 run.bat 上按右鍵 →「以系統管理員身分執行」")
+            self._offer_admin(running=self.engine.state.running)
         else:
             self.log("自動過劇情：關閉")
+
+    def _offer_admin(self, running: bool) -> bool:
+        """不是系統管理員時，問要不要以系統管理員身分重開（原神會擋掉一般權限程式的點擊）。
+        回傳 True 表示已經重開、這個視窗要關掉。"""
+        from .gameinput import is_admin, relaunch_as_admin
+
+        if is_admin():
+            return False
+        if not messagebox.askyesno(
+                "hoyoTTS", "自動過劇情需要以系統管理員身分執行（原神會擋掉一般權限程式的點擊）。\n\n"
+                           "要以系統管理員身分重新開啟 hoyoTTS 嗎？", parent=self.root):
+            self.log("⚠ 不是以系統管理員身分執行，自動過劇情的點擊會被原神擋掉")
+            return False
+        # 先放掉快捷鍵和 TTS 伺服器，新開的才拿得到
+        self.hotkeys.stop()
+        if running:
+            self.engine.shutdown()
+        if relaunch_as_admin():
+            self.dl_stop.set()
+            if not running:
+                self.engine.shutdown()
+            self.root.after(0, self.root.destroy)
+            return True
+        self.log("沒有取得系統管理員權限，繼續用一般權限執行")
+        self._bind_hotkeys()
+        if running:
+            self.engine.start()
+        return False
 
     def _apply_live(self):
         self.cfg["volume"] = round(self.var_vol.get(), 2)
@@ -508,28 +546,34 @@ class App:
         if text:
             self.engine.speak_test(text, self.cb_test.get().strip())
 
+    def _dl_game(self) -> str:
+        label = self.cb_dl_game.get()
+        return next((g for g, l in V.GAME_LABELS.items() if l == label), self.cfg["game"])
+
     def download_all(self, names: list[str] | None = None):
         if self.dl_thread and self.dl_thread.is_alive():
             self.log("已經在下載中")
             return
         self.dl_stop.clear()
         models_dir = self.cfg["models_dir"]
+        game, lang = self._dl_game(), self.cfg["lang"]
 
         def run():
             try:
-                remote = V.list_remote(self.cfg["game"], self.cfg["lang"])
+                remote = V.list_remote(game, lang)
             except Exception as e:
                 self.log(f"取得模型清單失敗：{e}")
                 return
-            self.remote_count = len(remote)
+            if game == self.cfg["game"]:
+                self.remote_count = len(remote)
             if names:
                 remote = [m for m in remote if m.name in names]
                 if not remote:
                     self.log(f"找不到模型：{'、'.join(names)}")
                     return
-            dest = V.lang_dir(models_dir, self.cfg["game"], self.cfg["lang"])
+            dest = V.lang_dir(models_dir, game, lang)
             todo = [m for m in remote if not V.find_local(dest, m.name)]
-            self.log(f"要下載 {len(todo)} 個角色（{sum(m.size for m in todo) / 1e9:.1f} GB）")
+            self.log(f"{V.GAME_LABELS.get(game, game)}：要下載 {len(todo)} 個角色（{sum(m.size for m in todo) / 1e9:.1f} GB）")
             self.dl_total = len(todo)
             self.dl_done = 0
 
@@ -539,7 +583,7 @@ class App:
                     self.dl_progress.pop(s[3:], None)
                 self.log("下載" + s)
 
-            failed = V.download_many(todo, models_dir, workers=3, log=logdone, stop=self.dl_stop,
+            failed = V.download_many(todo, models_dir, workers=3, log=logdone, stop=self.dl_stop, game=game, lang=lang,
                                      progress=lambda n, a, b: self.dl_progress.__setitem__(n, (a, b)))
             self.dl_progress.clear()
             self.log("下載停止" if self.dl_stop.is_set() else ("下載失敗：" + "、".join(failed) if failed else "下載完成"))

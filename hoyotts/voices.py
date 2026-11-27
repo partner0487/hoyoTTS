@@ -32,10 +32,20 @@ DEFAULT_LANG = "中文"
 
 _SUFFIX_RE = re.compile(r"_(ZH|JA|EN|KO)$")
 
+# 支援的遊戲（ModelScope 上的資料夾名）→ 預設聲音
+GAMES = {
+    "原神": {"fallback": "空", "options": "空", "narrator": "旁白"},
+    "星穹铁道": {"fallback": "开拓者(男)", "options": "开拓者(男)", "narrator": "开拓者(女)"},
+}
+GAME_LABELS = {"原神": "原神", "星穹铁道": "崩壞：星穹鐵道"}
+
 # 內建別名（key 為 normalize 過的簡體）。使用者在介面設定的別名優先。
 BUILTIN_ALIASES = {
     "萤": "荧",      # 台灣譯名「螢」轉簡體是「萤」，模型名是「荧」
     "旅行者": "空",
+    "穹": "开拓者(男)",
+    "星": "开拓者(女)",
+    "开拓者": "开拓者(男)",
 }
 _EMOTION_RE = re.compile(r"^【(.+?)】(.*)$")
 
@@ -204,7 +214,7 @@ def load_voice(dir_: str) -> Voice | None:
     def key(p):
         m = _EMOTION_RE.match(os.path.splitext(os.path.basename(p))[0])
         emo = m.group(1) if m else ""
-        return (0 if emo == "默认" else 1, p)
+        return ({"默认": 0, "中立": 1}.get(emo, 2), p)  # 原神標【默认】，星鐵標【中立】
 
     ref = sorted(refs, key=key)[0]
     stem = os.path.splitext(os.path.basename(ref))[0]
@@ -270,18 +280,21 @@ def _main() -> None:
     ap = argparse.ArgumentParser(description="下載 GPT-SoVITS 角色模型")
     ap.add_argument("--dir", default=None, help="模型資料夾（預設讀 config.json）")
     ap.add_argument("--workers", type=int, default=3)
+    ap.add_argument("--game", default=DEFAULT_GAME, help="遊戲：" + "、".join(GAMES) + "（預設原神）")
+    ap.add_argument("--lang", default=DEFAULT_LANG)
     ap.add_argument("names", nargs="*", help="角色名（簡體，不含 _ZH）；不給就全部下載")
     a = ap.parse_args()
     if a.dir is None:
         from .config import load_config
 
         a.dir = load_config()["models_dir"]
-    remote = list_remote()
+    remote = list_remote(a.game, a.lang)
     if a.names:
         remote = [m for m in remote if m.name in a.names]
-    todo = [m for m in remote if not find_local(lang_dir(a.dir), m.name)]
-    print(f"共 {len(remote)} 個，要下載 {len(todo)} 個，約 {sum(m.size for m in todo) / 1e9:.1f} GB → {a.dir}", flush=True)
-    failed = download_many(todo, a.dir, a.workers, log=lambda s: print(s, flush=True))
+    dest = lang_dir(a.dir, a.game, a.lang)
+    todo = [m for m in remote if not find_local(dest, m.name)]
+    print(f"共 {len(remote)} 個，要下載 {len(todo)} 個，約 {sum(m.size for m in todo) / 1e9:.1f} GB → {dest}", flush=True)
+    failed = download_many(todo, a.dir, a.workers, log=lambda s: print(s, flush=True), game=a.game, lang=a.lang)
     print("失敗：" + "、".join(failed) if failed else "全部完成", flush=True)
 
 

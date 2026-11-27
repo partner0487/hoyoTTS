@@ -8,6 +8,9 @@
 from __future__ import annotations
 
 import ctypes
+import os
+import subprocess
+import sys
 import time
 from ctypes import wintypes
 
@@ -55,6 +58,18 @@ def is_admin() -> bool:
         return bool(ctypes.windll.shell32.IsUserAnAdmin())
     except OSError:
         return False
+
+
+def relaunch_as_admin(args: list[str] | None = None) -> bool:
+    """以系統管理員身分重新開啟 hoyoTTS（會跳出 UAC 詢問）。回傳是否成功啟動（使用者按「否」就是 False）。
+    用 pythonw.exe 啟動，不會多開一個主控台視窗。"""
+    exe = sys.executable
+    w = os.path.join(os.path.dirname(exe), "pythonw.exe")
+    if os.path.exists(w):
+        exe = w
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    params = subprocess.list2cmdline([os.path.join(root, "main.py"), *(sys.argv[1:] if args is None else args)])
+    return ctypes.windll.shell32.ShellExecuteW(None, "runas", exe, params, root, 1) > 32
 
 
 def is_foreground(hwnd: int | None) -> bool:

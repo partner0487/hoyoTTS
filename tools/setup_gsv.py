@@ -22,7 +22,8 @@ PRETRAINED = os.path.join(GSV, "GPT_SoVITS", "pretrained_models")
 # v4 推理用不到：v1/v2/v3/v2Pro 底模、v3 的 BigVGAN、v2Pro 的說話人驗證模型
 UNUSED_PRETRAINED = [
     "s2D488k.pth", "s2G488k.pth", "s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt", "s2Gv3.pth",
-    "gsv-v2final-pretrained", "v2Pro", "sv", "models--nvidia--bigvgan_v2_24khz_100band_256x",
+    "gsv-v2final-pretrained", "v2Pro", "models--nvidia--bigvgan_v2_24khz_100band_256x",
+    # 保留 sv/：星穹鐵道的模型是 v2Pro，推論時要用它算說話人特徵
 ]
 SOURCES = {
     "HF": "https://huggingface.co/XXXXRT/GPT-SoVITS-Pretrained/resolve/main/",
