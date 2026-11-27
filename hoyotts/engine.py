@@ -114,6 +114,7 @@ class EngineState:
     name: str = ""
     text: str = ""
     options: list[str] = field(default_factory=list)
+    black: bool = False  # 黑幕旁白
     speaking: str = ""
     synthesizing: bool = False
 
@@ -350,6 +351,7 @@ class Engine:
                     else:
                         out_since = None
                         self.state.name, self.state.text, self.state.options = st.name, st.text, st.options
+                        self.state.black = st.black
                         key = (st.name, st.text)
                         count = count + 1 if is_stable(last_key, key) else 1
                         last_key = key
@@ -562,8 +564,9 @@ class Engine:
             return
         before = s.text
         if action == "click":
-            line_action = ap.get("line_action", "space")
-            what = "點擊對話框" if line_action == "click" else "按空白鍵"
+            # 黑幕旁白畫面寫的是「點擊後繼續」：一律點擊（點畫面中間偏下，「點擊後繼續」附近）
+            line_action = "click" if s.black else ap.get("line_action", "space")
+            what = "點擊畫面" if s.black else ("點擊對話框" if line_action == "click" else "按空白鍵")
         else:
             line_action = None
             what = f"按 {ap.get('option_key', 'F')} 選擇選項"

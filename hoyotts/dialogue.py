@@ -39,6 +39,7 @@ class DialogueState:
     name: str = ""
     text: str = ""
     options: list[str] = field(default_factory=list)
+    black: bool = False  # 黑幕旁白（全黑畫面中間白字、下面「點擊後繼續」），不是一般對話框
 
 
 def _join_words(words: list[str]) -> str:
@@ -134,6 +135,7 @@ class DialogueReader:
         # is_known(name) → 是不是已知角色（有模型或別名），用來從多個 OCR 結果裡挑名字
         self.is_known = None
         self._name_cache: tuple[bytes, str] | None = None
+        self._black_cache: tuple[bytes, str] | None = None
 
     # ---- 座標 ----
     @staticmethod
@@ -396,9 +398,45 @@ class DialogueReader:
         lines = [clean_option(s) for s in self._ocr_lines(crop)]
         return [s for s in lines if len(s) >= 2]
 
+    # 黑幕旁白（1080p 座標）：白字在畫面中間，金色「點擊後繼續」和下面的菱形圖示在底部中間
+    BLACK_TEXT = (200, 120, 1720, 900)
+    BLACK_HINT = (840, 940, 1080, 1045)
+
+    def read_black(self, frame: np.ndarray) -> str:
+        """全黑畫面中間的白字（過場旁白）。要有金色「點擊後繼續」才算：字已經全部淡入、在等玩家點。
+        不是黑幕旁白就回傳空字串。"""
+        small = frame[::8, ::8, :3]
+        if (small.max(axis=2) < 40).mean() < 0.9:
+            return ""  # 不是全黑的畫面（一般畫面很快就排除，不用往下算）
+        h, w = frame.shape[:2]
+        area = (w / BASE_W) * (h / BASE_H)
+        hint = self._crop(frame, self.BLACK_HINT).astype(np.int16)
+        gold = (hint[..., 0] > 180) & (hint[..., 1] > 120) & (hint[..., 2] < 100)
+        if gold.sum() < 300 * area:
+            return ""
+        crop = self._crop(frame, self.BLACK_TEXT)
+        mask = crop.min(axis=2) >= 200
+        if mask.sum() < 200 * area:
+            return ""
+        key = np.packbits(mask[::2, ::2]).tobytes()
+        if self._black_cache and self._black_cache[0] == key:
+            return self._black_cache[1]
+        text = ""
+        if self.rapid:
+            text = clean_text("".join(self._rapid_lines(crop, mask)))
+        else:
+            text = clean_text("".join(self._ocr_lines(crop)))
+        if not _CJK.search(text):
+            text = ""
+        self._black_cache = (key, text)
+        return text
+
     def read(self, frame: np.ndarray, with_options: bool = True) -> DialogueState:
         div = self.find_divider(frame)
         if div is None:
+            text = self.read_black(frame)
+            if text:
+                return DialogueState(True, "", text, [], black=True)
             return DialogueState(False)
         return DialogueState(True, self.read_name(frame), self.read_text(frame, div),
                              self.read_options(frame) if with_options else [])
