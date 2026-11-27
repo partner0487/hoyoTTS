@@ -1,11 +1,4 @@
-[submodule "GenshinDialog"]
-	path = GenshinDialog
-	url = https://github.com/mrzjy/GenshinDialog.git
-
-[submodule "parrots"]
-	path = parrots
-	url = https://github.com/shibing624/parrots.git
-
-[submodule "AnimeGameData"]
-	path = AnimeGameData
-	url = https://gitlab.com/Dimbreath/AnimeGameData.git
+[submodule "GPT-SoVITS"]
+	path = GPT-SoVITS
+	url = https://github.com/RVC-Boss/GPT-SoVITS.git
+	ignore = dirty

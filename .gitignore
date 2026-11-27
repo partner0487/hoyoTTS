@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.pyc
+*.wav
+models/
+config.json
+config.json.tmp
+tts_server.log
+tts_infer.yaml

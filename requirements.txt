@@ -1,0 +1,22 @@
+# hoyoTTS 自己用到的套件。GPT-SoVITS 的依賴請另外裝（見 README）。
+# numpy 要 <2：GPT-SoVITS 依賴的套件（torchmetrics 等）還不支援 numpy 2。
+numpy<2
+opencv-python<4.12
+screen-ocr[winrt]==0.7.0
+winrt-Windows.Globalization
+windows-capture==2.0.1
+opencc-python-reimplemented
+rapidfuzz
+requests
+soundfile
+sounddevice
+resampy
+# RapidOCR（文字辨識）需要的套件。rapidocr 本身要用 --no-deps 另外裝（見 README），
+# 否則會多裝 opencv-python-headless 跟 opencv-python 衝突、還會把 numpy 升到 2。
+pyclipper
+shapely
+omegaconf
+colorlog
+pyyaml
+tqdm
+six
