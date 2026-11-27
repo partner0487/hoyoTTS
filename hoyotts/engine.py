@@ -2,8 +2,12 @@
 
 兩條背景執行緒：
 - watcher：每隔 poll_interval 拍一張、OCR。台詞連續 stable_frames 次相同（打字動畫結束）
-  且跟上一句不同才送出。新台詞會打斷正在念的句子（玩家點過去了）。
-- speaker：從佇列拿句子去合成、播放。合成期間如果又有新台詞，舊的結果直接丟掉。
+  且跟上一句不同才送出。
+- synth：從佇列拿句子去合成。合成期間如果又有新台詞，舊的結果直接丟掉。
+- player：播放。
+
+玩家點到下一段時：正在念的這句剩不到 finish_tail 秒就讓它念完，下一句同時在背景合成，
+念完馬上接；剩更多就當作要跳過，立刻打斷。
 """
 
 from __future__ import annotations
@@ -83,6 +87,19 @@ class EngineState:
     text: str = ""
     options: list[str] = field(default_factory=list)
     speaking: str = ""
+    synthesizing: bool = False
+
+    @property
+    def phase(self) -> str:
+        if not self.running:
+            return "未啟動"
+        if self.speaking:
+            return "朗讀中"
+        if self.synthesizing:
+            return "合成中"
+        if self.paused:
+            return "已暫停"
+        return "對話中" if self.in_dialogue else "待機中"
 
 
 class Engine:
@@ -106,6 +123,8 @@ class Engine:
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
         self._last_line: Utterance | None = None
+        self._playing: Utterance | None = None
+        self._play_lock = threading.Lock()
         self._server_ready = threading.Event()
 
     # ---------- 控制 ----------
@@ -149,17 +168,23 @@ class Engine:
             self.interrupt()
         self.log("暫停朗讀" if paused else "繼續朗讀")
 
-    def interrupt(self) -> None:
-        """停止正在念的和還沒念的。"""
-        self._gen += 1
-        for q in (self._q, self._play_q):
-            while True:
-                try:
-                    q.get_nowait()
-                except queue.Empty:
-                    break
-        self.player.stop()
-        self.state.speaking = ""
+    def interrupt(self, keep_playing: bool = False) -> None:
+        """停止正在念的和還沒念的。keep_playing：正在念的那句念完，只取消後面排隊的。"""
+        with self._play_lock:
+            new = self._gen + 1
+            kept = self._playing if keep_playing and self.player.busy() else None
+            if kept:
+                kept.gen = new  # 先改它的 gen 再改全域的，播放執行緒才不會在中間把它當成已取消
+            self._gen = new
+            for q in (self._q, self._play_q):
+                while True:
+                    try:
+                        q.get_nowait()
+                    except queue.Empty:
+                        break
+            if not kept:
+                self.player.stop()
+                self.state.speaking = ""
         if self._synthesizing and self._stop_done.is_set():
             # 伺服器還在合成被打斷的句子，請它停下來，新句子才不用排隊。
             # _speak_loop 會等這個請求送完才開始合成下一句，避免 /stop 打到新句子。
@@ -284,7 +309,9 @@ class Engine:
         self.log(f"{who}：{text}  [{v.name}{'，' + note if note else ''}]")
         if self.state.paused:
             return
-        self.interrupt()  # 新台詞打斷舊的
+        # 玩家點到下一段了。快念完的那句讓它念完（下一句同時合成），剩很多就打斷。
+        tail = float(self.cfg.get("finish_tail", 0) or 0)
+        self.interrupt(keep_playing=tail > 0 and self.player.remaining() <= tail)
         u = Utterance("line", name, text, v, self._gen, note)
         self._last_line = u
         self._enqueue(u)
@@ -321,7 +348,7 @@ class Engine:
                 continue
             try:
                 t = time.time()
-                self._synthesizing = True
+                self._synthesizing = self.state.synthesizing = True
                 data, sr = self.client.synth(t2s(u.text), u.voice, self.cfg["speed"], self.cfg["sample_steps"])
             except Exception as e:
                 if u.gen == self._gen:
@@ -329,7 +356,7 @@ class Engine:
                     self._stop.wait(1)
                 continue
             finally:
-                self._synthesizing = False
+                self._synthesizing = self.state.synthesizing = False
             if u.gen != self._gen:
                 continue  # 合成期間玩家已經點到下一句
             self.log(f"  ▶ {u.voice.name} 合成 {time.time() - t:.1f} 秒，長度 {len(data) / sr:.1f} 秒")
@@ -341,11 +368,17 @@ class Engine:
                 u, data, sr = self._play_q.get(timeout=0.2)
             except queue.Empty:
                 continue
-            if u.gen != self._gen:
-                continue
-            self.state.speaking = f"{u.voice.name}：{u.text}"
-            self.player.play(data, sr, self.cfg["volume"])
-            while self.player.busy() and u.gen == self._gen and not self._stop.is_set():
+            with self._play_lock:
+                if u.gen != self._gen:
+                    continue
+                self._playing = u
+                self.state.speaking = f"{u.voice.name}：{u.text}"
+                self.player.play(data, sr, self.cfg["volume"])
+            # u.gen 可能被 interrupt(keep_playing) 改成新的，所以用 >= 判斷還要不要繼續念
+            while self.player.busy() and u.gen >= self._gen and not self._stop.is_set():
                 time.sleep(0.05)
-            if u.gen == self._gen:
-                self.state.speaking = ""
+            with self._play_lock:
+                if self._playing is u:
+                    self._playing = None
+                    if u.gen == self._gen:
+                        self.state.speaking = ""

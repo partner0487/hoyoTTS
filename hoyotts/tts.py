@@ -134,3 +134,7 @@ class Player:
     def busy(self) -> bool:
         return time.time() < self._end
 
+    def remaining(self) -> float:
+        """這句還剩幾秒。"""
+        return max(0.0, self._end - time.time())
+

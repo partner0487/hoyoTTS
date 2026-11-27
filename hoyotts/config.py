@@ -28,6 +28,9 @@ DEFAULTS: dict = {
     "sample_steps": 32,
     "poll_interval": 0.15,  # 秒
     "stable_frames": 2,     # 文字連續幾次不變才開始念（等打字動畫結束）
+    # 念到剩不到這麼多秒時點下一段：先念完這句，下一句在背景合成好接著念。
+    # 剩更多才點就當作要跳過，立刻打斷。0＝一律打斷。
+    "finish_tail": 3.0,
     "hotkeys": {"stop": "Ctrl+F7", "pause": "Ctrl+F8", "replay": "Ctrl+F9"},  # 單獨 F7–F9 常被其他程式占用，F1–F5 是遊戲的
     "regions": {
         "name": [560, 845, 1360, 895],

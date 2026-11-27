@@ -1,4 +1,4 @@
-"""hoyoTTS 圖形介面（tkinter）。"""
+"""hoyoTTS 圖形介面（tkinter，綠色主題）。"""
 
 from __future__ import annotations
 
@@ -15,11 +15,102 @@ from .config import load_config, save_config
 from .engine import Engine, t2s
 from .hotkeys import GlobalHotkeys
 
-FONT = ("Microsoft JhengHei UI", 10)
-FONT_BIG = ("Microsoft JhengHei UI", 13)
-FONT_NAME = ("Microsoft JhengHei UI", 12, "bold")
+UI_FONT = "Microsoft JhengHei UI"
+FONT = (UI_FONT, 10)
+FONT_BOLD = (UI_FONT, 10, "bold")
+FONT_BIG = (UI_FONT, 13)
+FONT_NAME = (UI_FONT, 13, "bold")
+FONT_TITLE = (UI_FONT, 16, "bold")
 
-OK, WARN, BAD, OFF = "#2e9d4f", "#d9a400", "#cc3d3d", "#9a9a9a"
+# 綠色主題
+BG = "#eef6f0"          # 視窗底色
+CARD = "#ffffff"        # 卡片、分頁內容
+FG = "#1d3326"          # 主要文字
+MUTED = "#5d7465"       # 次要文字
+BORDER = "#c9e0d0"
+GREEN = "#2f8f57"       # 主色
+GREEN_DARK = "#1d5e38"  # 標題列、按下
+GREEN_HOVER = "#3aa366"
+GREEN_SOFT = "#d6eedd"  # 一般按鈕、分頁標籤
+GREEN_SOFT_HOVER = "#c2e5cd"
+HEADER_MUTED = "#b9dcc5"
+
+# 標題列上的狀態燈（深綠底）
+OK, WARN, BAD, OFF = "#6ee69a", "#ffd45c", "#ff7b7b", "#86a593"
+
+# 狀態膠囊：狀態 → (底色, 字色, 說明)
+PHASES = {
+    "未啟動": ("#5d7465", "#ffffff", "按「開始」監聽遊戲"),
+    "待機中": ("#2a7347", "#e3f4e8", "等待下一段劇情對話"),
+    "對話中": ("#d6eedd", GREEN_DARK, "辨識台詞中"),
+    "合成中": ("#a8dcb9", GREEN_DARK, "語音合成中…"),
+    "朗讀中": ("#6ee69a", "#0f3520", "快念完時就可以點下一段"),
+    "已暫停": ("#ffd45c", "#4a3a00", "朗讀已暫停"),
+}
+
+
+def _setup_style(root: tk.Tk) -> None:
+    root.configure(bg=BG)
+    # 不用 "*Font"：它會蓋掉 ttk 樣式裡設的字型（標題、大字）。ttk 的字型在下面的 "." 樣式設。
+    for cls in ("Listbox", "Text", "Entry", "Label", "Button"):
+        root.option_add(f"*{cls}.Font", FONT)
+    root.option_add("*TCombobox*Listbox.Font", FONT)
+    root.option_add("*TCombobox*Listbox.selectBackground", GREEN)
+    root.option_add("*TCombobox*Listbox.selectForeground", "#ffffff")
+    st = ttk.Style(root)
+    st.theme_use("clam")  # clam 才能自訂顏色
+    st.configure(".", background=BG, foreground=FG, font=FONT, bordercolor=BORDER, lightcolor=BG,
+                 darkcolor=BG, troughcolor=GREEN_SOFT, focuscolor=GREEN, fieldbackground=CARD,
+                 selectbackground=GREEN, selectforeground="#ffffff")
+    st.configure("TFrame", background=BG)
+    st.configure("Card.TFrame", background=CARD)
+    st.configure("Header.TFrame", background=GREEN_DARK)
+    st.configure("TLabel", background=CARD, foreground=FG)
+    st.configure("Muted.TLabel", background=CARD, foreground=MUTED)
+    st.configure("Header.TLabel", background=GREEN_DARK, foreground="#ffffff")
+    st.configure("HeaderMuted.TLabel", background=GREEN_DARK, foreground=HEADER_MUTED)
+    st.configure("Title.TLabel", background=GREEN_DARK, foreground="#ffffff", font=FONT_TITLE)
+
+    st.configure("TButton", background=GREEN_SOFT, foreground=GREEN_DARK, bordercolor=BORDER,
+                 lightcolor=GREEN_SOFT, darkcolor=GREEN_SOFT, padding=(12, 6), relief="flat")
+    st.map("TButton", background=[("pressed", BORDER), ("active", GREEN_SOFT_HOVER)],
+           lightcolor=[("active", GREEN_SOFT_HOVER)], darkcolor=[("active", GREEN_SOFT_HOVER)])
+    st.configure("Accent.TButton", background=GREEN, foreground="#ffffff", bordercolor=GREEN_DARK,
+                 lightcolor=GREEN, darkcolor=GREEN, font=(UI_FONT, 11, "bold"), padding=(18, 7))
+    st.map("Accent.TButton", background=[("pressed", GREEN_DARK), ("active", GREEN_HOVER)],
+           lightcolor=[("active", GREEN_HOVER)], darkcolor=[("active", GREEN_HOVER)])
+
+    st.configure("TNotebook", background=BG, borderwidth=0, bordercolor=BORDER)
+    st.configure("TNotebook.Tab", background=GREEN_SOFT, foreground=GREEN_DARK, padding=(16, 6),
+                 bordercolor=BORDER, lightcolor=GREEN_SOFT)
+    st.map("TNotebook.Tab", background=[("selected", CARD), ("active", GREEN_SOFT_HOVER)],
+           foreground=[("selected", GREEN)], lightcolor=[("selected", CARD)])
+    st.configure("TLabelframe", background=CARD, bordercolor=BORDER, lightcolor=CARD, darkcolor=CARD)
+    st.configure("TLabelframe.Label", background=CARD, foreground=GREEN_DARK, font=FONT_BOLD)
+    st.configure("TCheckbutton", background=CARD, foreground=FG, indicatorbackground=CARD,
+                 indicatorforeground="#ffffff")
+    st.map("TCheckbutton", background=[("active", CARD)],
+           indicatorbackground=[("selected", GREEN), ("active", GREEN_SOFT)])
+    st.configure("TEntry", fieldbackground=CARD, bordercolor=BORDER, lightcolor=CARD, padding=4)
+    st.map("TEntry", bordercolor=[("focus", GREEN)], lightcolor=[("focus", GREEN)])
+    for w in ("TCombobox", "TSpinbox"):
+        st.configure(w, fieldbackground=CARD, background=GREEN_SOFT, arrowcolor=GREEN_DARK,
+                     bordercolor=BORDER, lightcolor=CARD, padding=3)
+        st.map(w, bordercolor=[("focus", GREEN)], lightcolor=[("focus", GREEN)])
+    st.configure("Horizontal.TProgressbar", background=GREEN, troughcolor=GREEN_SOFT, bordercolor=BORDER,
+                 lightcolor=GREEN, darkcolor=GREEN)
+    st.configure("Horizontal.TScale", background=GREEN, troughcolor=GREEN_SOFT, bordercolor=BORDER,
+                 lightcolor=GREEN, darkcolor=GREEN)
+    st.map("Horizontal.TScale", background=[("active", GREEN_HOVER)])
+    st.configure("Vertical.TScrollbar", background=GREEN_SOFT, troughcolor=CARD, bordercolor=CARD,
+                 arrowcolor=GREEN_DARK, lightcolor=GREEN_SOFT, darkcolor=GREEN_SOFT)
+
+
+def _style_tk(w: tk.Widget) -> None:
+    """tk 原生元件（Listbox、Text）配色。"""
+    w.configure(bg=CARD, fg=FG, relief="flat", borderwidth=0, highlightthickness=1,
+                highlightbackground=BORDER, highlightcolor=GREEN, selectbackground=GREEN,
+                selectforeground="#ffffff")
 
 
 class App:
@@ -32,22 +123,17 @@ class App:
         self.dl_stop = threading.Event()
         self.dl_thread: threading.Thread | None = None
         self.dl_progress: dict[str, tuple[int, int]] = {}
+        self.dl_total = self.dl_done = 0
         self.remote_count = 0
         self._preview_win: tk.Toplevel | None = None
+        self._phase: str | None = None
 
         root.title("hoyoTTS")
-        root.geometry("980x760")
-        root.minsize(820, 620)
-        root.option_add("*Font", FONT)
-        style = ttk.Style(root)
-        try:
-            style.theme_use("vista")
-        except tk.TclError:
-            pass
-        style.configure("Big.TButton", font=FONT_BIG, padding=(14, 6))
-        style.configure("TLabelframe.Label", font=("Microsoft JhengHei UI", 10, "bold"))
+        root.geometry("1000x780")
+        root.minsize(840, 640)
+        _setup_style(root)
 
-        self._build_status()
+        self._build_header()
         self._build_controls()
         self._build_current()
         self._build_tabs()
@@ -61,54 +147,75 @@ class App:
 
     # ---------- 版面 ----------
     def _light(self, parent, text):
-        f = ttk.Frame(parent)
-        c = tk.Canvas(f, width=14, height=14, highlightthickness=0)
-        dot = c.create_oval(2, 2, 12, 12, fill=OFF, outline="")
-        c.pack(side="left", padx=(0, 4))
-        ttk.Label(f, text=text).pack(side="left")
-        val = ttk.Label(f, text="—", foreground="#555")
-        val.pack(side="left", padx=(4, 0))
-        f.pack(side="left", padx=(0, 22))
+        f = ttk.Frame(parent, style="Header.TFrame")
+        c = tk.Canvas(f, width=12, height=12, highlightthickness=0, bg=GREEN_DARK)
+        dot = c.create_oval(1, 1, 11, 11, fill=OFF, outline="")
+        c.pack(side="left", padx=(0, 6))
+        ttk.Label(f, text=text, style="HeaderMuted.TLabel").pack(side="left")
+        val = ttk.Label(f, text="—", style="Header.TLabel")
+        val.pack(side="left", padx=(6, 0))
+        f.pack(side="left", padx=(0, 28))
         return c, dot, val
 
-    def _build_status(self):
-        bar = ttk.Frame(self.root, padding=(12, 10, 12, 4))
-        bar.pack(fill="x")
-        self.l_cap = self._light(bar, "遊戲擷取：")
-        self.l_srv = self._light(bar, "TTS 伺服器：")
-        self.l_mod = self._light(bar, "角色模型：")
+    def _build_header(self):
+        """深綠標題列：名稱、目前狀態、三個狀態燈。"""
+        head = ttk.Frame(self.root, style="Header.TFrame", padding=(18, 12, 18, 10))
+        head.pack(fill="x")
+        top = ttk.Frame(head, style="Header.TFrame")
+        top.pack(fill="x")
+        ttk.Label(top, text="hoyoTTS", style="Title.TLabel").pack(side="left")
+        ttk.Label(top, text="原神劇情語音朗讀", style="HeaderMuted.TLabel").pack(side="left", padx=(10, 0), pady=(5, 0))
+        self.l_phase = tk.Label(top, text="", font=FONT_BOLD, padx=14, pady=3, bd=0)
+        self.l_phase.pack(side="right")
+        self.l_phase_hint = ttk.Label(top, text="", style="HeaderMuted.TLabel")
+        self.l_phase_hint.pack(side="right", padx=(0, 10))
+        lights = ttk.Frame(head, style="Header.TFrame")
+        lights.pack(fill="x", pady=(10, 0))
+        self.l_cap = self._light(lights, "遊戲擷取")
+        self.l_srv = self._light(lights, "TTS 伺服器")
+        self.l_mod = self._light(lights, "角色模型")
 
     def _build_controls(self):
-        bar = ttk.Frame(self.root, padding=(12, 4))
+        bar = ttk.Frame(self.root, padding=(16, 12, 16, 4))
         bar.pack(fill="x")
         hk = self.cfg["hotkeys"]
-        self.b_run = ttk.Button(bar, text="▶ 開始", style="Big.TButton", command=self.toggle_run)
+        self.b_run = ttk.Button(bar, text="▶  開始", style="Accent.TButton", width=8, command=self.toggle_run)
         self.b_run.pack(side="left")
-        self.b_pause = ttk.Button(bar, text=f"⏸ 暫停朗讀（{hk['pause']}）", command=self.toggle_pause)
-        self.b_pause.pack(side="left", padx=(10, 0))
-        ttk.Button(bar, text=f"⏹ 停止這句（{hk['stop']}）", command=self.engine.interrupt).pack(side="left", padx=(6, 0))
-        ttk.Button(bar, text=f"↻ 重念（{hk['replay']}）", command=self.engine.replay).pack(side="left", padx=(6, 0))
+        self.b_pause = ttk.Button(bar, text=f"⏸ 暫停朗讀  {hk['pause']}", command=self.toggle_pause)
+        self.b_pause.pack(side="left", padx=(12, 0))
+        ttk.Button(bar, text=f"⏹ 停止這句  {hk['stop']}", command=self.engine.interrupt).pack(side="left", padx=(6, 0))
+        ttk.Button(bar, text=f"↻ 重念  {hk['replay']}", command=self.engine.replay).pack(side="left", padx=(6, 0))
         ttk.Button(bar, text="擷取預覽", command=self.show_preview).pack(side="right")
 
     def _build_current(self):
-        box = ttk.Labelframe(self.root, text="目前對話", padding=(12, 6))
-        box.pack(fill="x", padx=12, pady=(6, 4))
-        top = ttk.Frame(box)
+        """目前對話卡片，左邊一條綠色色帶。"""
+        outer = tk.Frame(self.root, bg=BORDER)
+        outer.pack(fill="x", padx=16, pady=(8, 4))
+        tk.Frame(outer, bg=GREEN, width=5).pack(side="left", fill="y")
+        box = ttk.Frame(outer, style="Card.TFrame", padding=(14, 10, 14, 12))
+        box.pack(side="left", fill="both", expand=True, padx=(0, 1), pady=1)
+        top = ttk.Frame(box, style="Card.TFrame")
         top.pack(fill="x")
-        self.v_name = ttk.Label(top, text="—", font=FONT_NAME, foreground="#b8860b")
+        self.v_name = ttk.Label(top, text="—", font=FONT_NAME, foreground=GREEN_DARK)
         self.v_name.pack(side="left")
-        self.v_voice = ttk.Label(top, text="", foreground="#555")
+        self.v_voice = ttk.Label(top, text="", style="Muted.TLabel")
         self.v_voice.pack(side="left", padx=(10, 0))
-        self.v_speaking = ttk.Label(top, text="", foreground=OK)
-        self.v_speaking.pack(side="right")
         self.v_text = ttk.Label(box, text="", font=FONT_BIG, wraplength=900, justify="left")
-        self.v_text.pack(fill="x", pady=(4, 0))
-        self.v_opts = ttk.Label(box, text="", foreground="#2b6cb0", wraplength=900, justify="left")
-        self.v_opts.pack(fill="x", pady=(2, 0))
+        self.v_text.pack(fill="x", pady=(6, 0))
+        self.v_opts = ttk.Label(box, text="", foreground=GREEN, wraplength=900, justify="left")
+        self.v_opts.pack(fill="x", pady=(4, 0))
+        self.v_speaking = ttk.Label(box, text="", style="Muted.TLabel")
+        self.v_speaking.pack(fill="x", pady=(6, 0))
+
+        def rewrap(e):
+            for w in (self.v_text, self.v_opts, self.v_speaking):
+                w.config(wraplength=max(300, e.width - 40))
+
+        box.bind("<Configure>", rewrap)
 
     def _build_tabs(self):
         nb = ttk.Notebook(self.root)
-        nb.pack(fill="both", expand=True, padx=12, pady=(4, 12))
+        nb.pack(fill="both", expand=True, padx=16, pady=(8, 16))
         self.nb = nb
         self._tab_log(nb)
         self._tab_settings(nb)
@@ -116,10 +223,18 @@ class App:
         self._tab_download(nb)
         self._tab_test(nb)
 
+    def _tab(self, nb, text, padding=14):
+        f = ttk.Frame(nb, padding=padding, style="Card.TFrame")
+        nb.add(f, text=text)
+        return f
+
     def _tab_log(self, nb):
-        f = ttk.Frame(nb, padding=6)
-        nb.add(f, text="紀錄")
-        self.t_log = ScrolledText(f, height=12, font=("Microsoft JhengHei UI", 10), state="disabled", wrap="word")
+        f = self._tab(nb, "紀錄", 8)
+        self.t_log = ScrolledText(f, height=12, font=FONT, state="disabled", wrap="word", padx=8, pady=6)
+        _style_tk(self.t_log)
+        self.t_log.tag_configure("time", foreground="#8aa394")
+        self.t_log.tag_configure("synth", foreground="#7a9384")
+        self.t_log.tag_configure("opt", foreground=GREEN)
         self.t_log.pack(fill="both", expand=True)
 
     def _voice_combo(self, parent, value):
@@ -128,82 +243,92 @@ class App:
         return cb
 
     def _tab_settings(self, nb):
-        f = ttk.Frame(nb, padding=12)
-        nb.add(f, text="設定")
+        f = self._tab(nb, "設定")
         v = self.cfg["voices"]
-        g = ttk.Labelframe(f, text="聲音", padding=10)
-        g.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
+        g = ttk.Labelframe(f, text="聲音", padding=12)
+        g.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
         rows = [("找不到模型的角色", "fallback"), ("旅行者的對話選項", "options"), ("旁白（沒有角色名）", "narrator")]
         self.voice_combos = {}
         for i, (label, key) in enumerate(rows):
-            ttk.Label(g, text=label).grid(row=i, column=0, sticky="w", pady=3)
+            ttk.Label(g, text=label).grid(row=i, column=0, sticky="w", pady=4)
             cb = self._voice_combo(g, v[key])
-            cb.grid(row=i, column=1, sticky="w", padx=(8, 0))
+            cb.grid(row=i, column=1, sticky="w", padx=(10, 0))
             self.voice_combos[key] = cb
         self.var_opts = tk.BooleanVar(value=self.cfg.get("read_options", True))
-        ttk.Checkbutton(g, text="念對話選項", variable=self.var_opts).grid(row=3, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        ttk.Checkbutton(g, text="念對話選項", variable=self.var_opts).grid(row=3, column=0, columnspan=2, sticky="w", pady=(10, 0))
         self.var_auto = tk.BooleanVar(value=self.cfg.get("auto_start", True))
-        ttk.Checkbutton(g, text="開啟程式時自動開始", variable=self.var_auto).grid(row=4, column=0, columnspan=2, sticky="w")
+        ttk.Checkbutton(g, text="開啟程式時自動開始", variable=self.var_auto).grid(row=4, column=0, columnspan=2, sticky="w", pady=(2, 0))
 
-        p = ttk.Labelframe(f, text="播放", padding=10)
+        p = ttk.Labelframe(f, text="播放", padding=12)
         p.grid(row=0, column=1, sticky="nsew")
         self.var_vol = tk.DoubleVar(value=self.cfg["volume"])
         self.var_speed = tk.DoubleVar(value=self.cfg["speed"])
         for i, (label, var, lo, hi) in enumerate([("音量", self.var_vol, 0, 1.5), ("語速", self.var_speed, 0.6, 1.6)]):
-            ttk.Label(p, text=label).grid(row=i, column=0, sticky="w", pady=3)
+            ttk.Label(p, text=label).grid(row=i, column=0, sticky="w", pady=4)
             ttk.Scale(p, from_=lo, to=hi, variable=var, length=200,
-                      command=lambda _=None: self._apply_live()).grid(row=i, column=1, padx=8)
-            lab = ttk.Label(p, width=5)
+                      command=lambda _=None: self._apply_live()).grid(row=i, column=1, padx=10)
+            lab = ttk.Label(p, width=5, style="Muted.TLabel")
             lab.grid(row=i, column=2)
             var.trace_add("write", lambda *_, l=lab, vv=var: l.config(text=f"{vv.get():.2f}"))
             var.set(var.get())
+        ttk.Label(p, text="點下一段時").grid(row=2, column=0, sticky="w", pady=4)
+        tail = ttk.Frame(p, style="Card.TFrame")
+        tail.grid(row=2, column=1, columnspan=2, sticky="w", padx=10)
+        ttk.Label(tail, text="剩不到").pack(side="left")
+        self.var_tail = tk.StringVar(value=f"{self.cfg.get('finish_tail', 3.0):g}")
+        ttk.Spinbox(tail, from_=0, to=10, increment=0.5, width=5, textvariable=self.var_tail,
+                    command=self._apply_live).pack(side="left", padx=4)
+        ttk.Label(tail, text="秒就先念完這句").pack(side="left")
+        ttk.Label(p, text="（0＝一律立刻打斷；剩比較多才點會當作跳過）", style="Muted.TLabel").grid(
+            row=3, column=1, columnspan=2, sticky="w", padx=10)
         hk = self.cfg["hotkeys"]
         self.hk_entries = {}
-        for i, (label, key) in enumerate([("停止這句", "stop"), ("暫停／繼續", "pause"), ("重念", "replay")], start=2):
-            ttk.Label(p, text=f"快捷鍵：{label}").grid(row=i, column=0, sticky="w", pady=3)
+        for i, (label, key) in enumerate([("停止這句", "stop"), ("暫停／繼續", "pause"), ("重念", "replay")], start=4):
+            ttk.Label(p, text=f"快捷鍵：{label}").grid(row=i, column=0, sticky="w", pady=4)
             e = ttk.Entry(p, width=12)
             e.insert(0, hk[key])
-            e.grid(row=i, column=1, sticky="w", padx=8)
+            e.grid(row=i, column=1, sticky="w", padx=10)
             self.hk_entries[key] = e
 
-        m = ttk.Labelframe(f, text="模型資料夾", padding=10)
-        m.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        m = ttk.Labelframe(f, text="模型資料夾", padding=12)
+        m.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(12, 0))
         self.e_dir = ttk.Entry(m, width=60)
         self.e_dir.insert(0, self.cfg["models_dir"])
         self.e_dir.pack(side="left", fill="x", expand=True)
         ttk.Button(m, text="瀏覽…", command=self._browse_dir).pack(side="left", padx=6)
         ttk.Button(m, text="重新載入模型", command=lambda: self._reload_voices(True)).pack(side="left")
 
-        ttk.Button(f, text="儲存設定", style="Big.TButton", command=self.save_settings).grid(
-            row=2, column=0, columnspan=2, sticky="e", pady=(12, 0))
+        ttk.Button(f, text="儲存設定", style="Accent.TButton", command=self.save_settings).grid(
+            row=2, column=0, columnspan=2, sticky="e", pady=(14, 0))
         f.columnconfigure(0, weight=1)
         f.columnconfigure(1, weight=1)
 
     def _tab_alias(self, nb):
-        f = ttk.Frame(nb, padding=12)
-        nb.add(f, text="角色對應")
+        f = self._tab(nb, "角色對應")
         ttk.Label(f, text="找不到模型的角色會用後備聲音。在這裡把角色名指定給某個模型，例如把你的旅行者名字對到「空」。",
-                  foreground="#555", wraplength=880).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 8))
-        left = ttk.Labelframe(f, text="最近沒對應到的角色（雙擊帶入）", padding=6)
+                  style="Muted.TLabel", wraplength=880).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 10))
+        left = ttk.Labelframe(f, text="最近沒對應到的角色（雙擊帶入）", padding=8)
         left.grid(row=1, column=0, sticky="nsew")
         self.lb_unmatched = tk.Listbox(left, height=12, activestyle="none")
+        _style_tk(self.lb_unmatched)
         self.lb_unmatched.pack(fill="both", expand=True)
         self.lb_unmatched.bind("<Double-1>", self._pick_unmatched)
 
-        mid = ttk.Frame(f, padding=(12, 0))
+        mid = ttk.Frame(f, padding=(14, 0), style="Card.TFrame")
         mid.grid(row=1, column=1, sticky="n")
         ttk.Label(mid, text="遊戲裡的角色名").pack(anchor="w")
         self.e_alias = ttk.Entry(mid, width=18)
-        self.e_alias.pack(anchor="w", pady=(0, 8))
+        self.e_alias.pack(anchor="w", pady=(2, 10))
         ttk.Label(mid, text="使用模型").pack(anchor="w")
         self.cb_alias = self._voice_combo(mid, "")
-        self.cb_alias.pack(anchor="w", pady=(0, 8))
-        ttk.Button(mid, text="新增／更新 →", command=self._add_alias).pack(anchor="w", fill="x")
+        self.cb_alias.pack(anchor="w", pady=(2, 10))
+        ttk.Button(mid, text="新增／更新 →", style="Accent.TButton", command=self._add_alias).pack(anchor="w", fill="x")
         ttk.Button(mid, text="← 刪除選取", command=self._del_alias).pack(anchor="w", fill="x", pady=(6, 0))
 
-        right = ttk.Labelframe(f, text="已設定的對應", padding=6)
+        right = ttk.Labelframe(f, text="已設定的對應", padding=8)
         right.grid(row=1, column=2, sticky="nsew")
         self.lb_alias = tk.Listbox(right, height=12, activestyle="none")
+        _style_tk(self.lb_alias)
         self.lb_alias.pack(fill="both", expand=True)
         f.columnconfigure(0, weight=1)
         f.columnconfigure(2, weight=1)
@@ -211,14 +336,13 @@ class App:
         self._refresh_alias()
 
     def _tab_download(self, nb):
-        f = ttk.Frame(nb, padding=12)
-        nb.add(f, text="模型下載")
+        f = self._tab(nb, "模型下載")
         ttk.Label(f, text="來源：ModelScope aihobbyist/GPT-SoVITS_Model_Collection（原神／中文，CC-BY-NC，禁止商用與二次散布）。"
                           "每個角色約 200MB，全部約 52GB。已下載的會跳過，中斷後可以續傳。",
-                  foreground="#555", wraplength=880).pack(anchor="w")
-        row = ttk.Frame(f)
-        row.pack(fill="x", pady=8)
-        self.b_dl_all = ttk.Button(row, text="下載全部", command=self.download_all)
+                  style="Muted.TLabel", wraplength=880).pack(anchor="w")
+        row = ttk.Frame(f, style="Card.TFrame")
+        row.pack(fill="x", pady=12)
+        self.b_dl_all = ttk.Button(row, text="下載全部", style="Accent.TButton", command=self.download_all)
         self.b_dl_all.pack(side="left")
         ttk.Button(row, text="停止下載", command=self.dl_stop.set).pack(side="left", padx=6)
         ttk.Label(row, text="或只下載：").pack(side="left", padx=(20, 4))
@@ -227,22 +351,22 @@ class App:
         ttk.Button(row, text="下載", command=self.download_one).pack(side="left", padx=4)
         self.pb = ttk.Progressbar(f, mode="determinate")
         self.pb.pack(fill="x")
-        self.l_dl = ttk.Label(f, text="", foreground="#555")
-        self.l_dl.pack(anchor="w", pady=(4, 0))
+        self.l_dl = ttk.Label(f, text="", style="Muted.TLabel")
+        self.l_dl.pack(anchor="w", pady=(6, 0))
 
     def _tab_test(self, nb):
-        f = ttk.Frame(nb, padding=12)
-        nb.add(f, text="試聽")
+        f = self._tab(nb, "試聽")
         ttk.Label(f, text="輸入文字（繁簡都可以），選一個角色念念看：").pack(anchor="w")
-        self.t_test = tk.Text(f, height=4, wrap="word", font=FONT_BIG)
+        self.t_test = tk.Text(f, height=4, wrap="word", font=FONT_BIG, padx=8, pady=6, insertbackground=GREEN)
+        _style_tk(self.t_test)
         self.t_test.insert("1.0", "旅行者，我們快走吧！前面好像有寶箱哦。")
-        self.t_test.pack(fill="x", pady=6)
-        row = ttk.Frame(f)
+        self.t_test.pack(fill="x", pady=8)
+        row = ttk.Frame(f, style="Card.TFrame")
         row.pack(fill="x")
         self.cb_test = self._voice_combo(row, "派蒙" if self.engine.library.get("派蒙") else self.cfg["voices"]["fallback"])
         self.cb_test.pack(side="left")
-        ttk.Button(row, text="念出來", command=self._test_speak).pack(side="left", padx=8)
-        ttk.Label(f, text="需要先按「開始」讓 TTS 伺服器啟動。", foreground="#555").pack(anchor="w", pady=(8, 0))
+        ttk.Button(row, text="念出來", style="Accent.TButton", command=self._test_speak).pack(side="left", padx=8)
+        ttk.Label(f, text="需要先按「開始」讓 TTS 伺服器啟動。", style="Muted.TLabel").pack(anchor="w", pady=(10, 0))
 
     # ---------- 動作 ----------
     def log(self, msg: str) -> None:  # 任何執行緒都能呼叫
@@ -251,10 +375,10 @@ class App:
     def toggle_run(self):
         if self.engine.state.running:
             threading.Thread(target=self.engine.stop, daemon=True).start()
-            self.b_run.config(text="▶ 開始")
+            self.b_run.config(text="▶  開始")
         else:
             self.engine.start()
-            self.b_run.config(text="■ 停止")
+            self.b_run.config(text="■  停止")
 
     def toggle_pause(self):
         self.engine.set_paused(not self.engine.state.paused)
@@ -268,6 +392,10 @@ class App:
     def _apply_live(self):
         self.cfg["volume"] = round(self.var_vol.get(), 2)
         self.cfg["speed"] = round(self.var_speed.get(), 2)
+        try:
+            self.cfg["finish_tail"] = min(10.0, max(0.0, round(float(self.var_tail.get()), 1)))
+        except ValueError:
+            pass
 
     def save_settings(self):
         for key, cb in self.voice_combos.items():
@@ -421,7 +549,7 @@ class App:
         img.thumbnail((960, 540))
         if self._preview_win and self._preview_win.winfo_exists():
             self._preview_win.destroy()
-        w = tk.Toplevel(self.root)
+        w = tk.Toplevel(self.root, bg=CARD)
         w.title("擷取預覽")
         self._preview_win = w
         photo = ImageTk.PhotoImage(img)
@@ -430,7 +558,7 @@ class App:
         lab.pack()
         info = (f"在對話中：{'是' if st.in_dialogue else '否'}（綠線＝偵測到對話分隔線）\n"
                 f"角色：{st.name or '—'}\n台詞：{st.text or '—'}\n選項：{' ／ '.join(st.options) or '—'}")
-        ttk.Label(w, text=info, padding=8, wraplength=940, justify="left").pack(anchor="w")
+        ttk.Label(w, text=info, padding=10, wraplength=940, justify="left").pack(anchor="w")
 
     def on_close(self):
         self.dl_stop.set()
@@ -447,34 +575,46 @@ class App:
         c.itemconfig(dot, fill=color)
         val.config(text=text)
 
+    def _append_log(self, lines: list[str]) -> None:
+        self.t_log.config(state="normal")
+        for line in lines:
+            ts, _, msg = line.partition("  ")
+            tag = "synth" if msg.startswith("  ▶") else ("opt" if msg.startswith("選項：") else "")
+            self.t_log.insert("end", ts + "  ", "time")
+            self.t_log.insert("end", msg + "\n", tag)
+        n = int(self.t_log.index("end-1c").split(".")[0])
+        if n > 2000:
+            self.t_log.delete("1.0", f"{n - 2000}.0")
+        self.t_log.see("end")
+        self.t_log.config(state="disabled")
+
     def _tick(self):
+        lines = []
         try:
-            lines = []
             while True:
                 lines.append(self.logq.get_nowait())
         except queue.Empty:
             pass
         if lines:
-            self.t_log.config(state="normal")
-            self.t_log.insert("end", "\n".join(lines) + "\n")
-            n = int(self.t_log.index("end-1c").split(".")[0])
-            if n > 2000:
-                self.t_log.delete("1.0", f"{n - 2000}.0")
-            self.t_log.see("end")
-            self.t_log.config(state="disabled")
+            self._append_log(lines)
 
         s = self.engine.state
+        phase = s.phase
+        if phase != self._phase:
+            self._phase = phase
+            bg, fg, hint = PHASES[phase]
+            self.l_phase.config(text=f"● {phase}", bg=bg, fg=fg)
+            self.l_phase_hint.config(text=hint)
+
         cap = s.capture if s.running else "未啟動"
         self._set_light(self.l_cap, OK if "擷取中" in cap else (WARN if s.running else OFF), cap)
         srv = s.server
         self._set_light(self.l_srv, OK if srv == "就緒" else (BAD if "失敗" in srv else (WARN if s.running else OFF)), srv)
         n = len(self.engine.library.names())
         total = self.remote_count or 263
-        dl = ""
-        if self.dl_thread and self.dl_thread.is_alive():
-            dl = f"（下載中 {self.dl_done}/{self.dl_total}）"
+        dl = f"（下載中 {self.dl_done}/{self.dl_total}）" if self.dl_thread and self.dl_thread.is_alive() else ""
         self._set_light(self.l_mod, OK if n else BAD, f"{n}/{total} {dl}")
-        self.b_pause.config(text=("▶ 繼續朗讀" if s.paused else "⏸ 暫停朗讀") + f"（{self.cfg['hotkeys']['pause']}）")
+        self.b_pause.config(text=("▶ 繼續朗讀" if s.paused else "⏸ 暫停朗讀") + f"  {self.cfg['hotkeys']['pause']}")
 
         if s.running and s.in_dialogue:
             self.v_name.config(text=s.name or "（旁白）")
@@ -483,11 +623,14 @@ class App:
             self.v_text.config(text=s.text)
             self.v_opts.config(text=("選項：" + " ／ ".join(s.options)) if s.options else "")
         elif s.running:
-            self.v_name.config(text="—")
-            self.v_voice.config(text="（沒有在對話中）")
+            self.v_name.config(text="待機中")
+            self.v_voice.config(text="進入劇情對話後會自動開始念")
             self.v_text.config(text="")
             self.v_opts.config(text="")
-        self.v_speaking.config(text=("🔊 " + s.speaking[:40]) if s.speaking else "")
+        else:
+            self.v_name.config(text="—")
+            self.v_voice.config(text="按「開始」監聽遊戲畫面")
+        self.v_speaking.config(text=("🔊 正在念　" + s.speaking[:80]) if s.speaking else "")
 
         if self.dl_progress:
             got = sum(a for a, _ in self.dl_progress.values())
