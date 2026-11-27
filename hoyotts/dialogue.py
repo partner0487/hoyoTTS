@@ -50,6 +50,18 @@ def _join_words(words: list[str]) -> str:
     return out
 
 
+def _fix_dashes(words) -> list[str]:
+    """破折號「──」會被 OCR 認成「一」，但框的寬度約一個半字寬，真的「一」只有一個字寬。
+    拿同一行一般字（不扁的）的寬度當基準，比它寬 1.3 倍以上的「一」換回「——」。"""
+    texts = [w.text for w in words]
+    normal = sorted(w.width for w in words if len(w.text) == 1 and w.height >= 0.6 * w.width)
+    if not normal:
+        return texts
+    cw = normal[len(normal) // 2]
+    return ["——" if set(w.text) <= {"一", "－", "-", "—", "ー"} and w.width >= 1.3 * cw else t
+            for w, t in zip(words, texts)]
+
+
 def clean_text(s: str) -> str:
     s = s.translate(_FIXES).strip()
     # 句尾的「…」常被認成引號；「——」常被認成「一乛」
@@ -153,7 +165,7 @@ class DialogueReader:
 
     def _ocr_lines(self, img: np.ndarray, reader=None) -> list[str]:
         res = (reader or self.ocr).read_image(Image.fromarray(img))
-        return [_join_words([w.text for w in line.words]) for line in res.result.lines]
+        return [_join_words(_fix_dashes(line.words)) for line in res.result.lines]
 
     def read_name(self, frame: np.ndarray) -> str:
         crop = self._crop(frame, self.regions["name"]).astype(np.int16)
