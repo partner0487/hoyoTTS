@@ -201,16 +201,33 @@ class DialogueReader:
         lines = sorted((l for l in res.result.lines if l.words), key=lambda l: min(w.top for w in l.words))
         return [_join_words(_fix_dashes(line.words)) for line in lines]
 
-    def _rapid_lines(self, img: np.ndarray, mask: np.ndarray, min_score: float = 0.5) -> list[str]:
+    def _rapid_lines(self, img: np.ndarray, mask: np.ndarray, min_score: float = 0.5,
+                     dark_bg: float | None = None) -> list[str]:
         """用字的遮罩做水平投影切出每一行（由上往下），每行裁到字的範圍再丟給 RapidOCR 辨識。
-        我們已經知道文字在哪，不用跑文字偵測（偵測要近 1 秒，只辨識一行十幾毫秒）。"""
+        我們已經知道文字在哪，不用跑文字偵測（偵測要近 1 秒，只辨識一行十幾毫秒）。
+        dark_bg（選項用，一行最高幾 px）：只留下在深色底條上、高度像一行字的；
+        亮色景物（白雲、雪地）被切成的「行」丟掉。"""
         s = img.shape[0] / 97 if img.shape[0] < 300 else 1.0
         out = []
         for y0, y1, x0, x1 in _split_lines(mask, min_h=max(8, int(12 * s)), pad=max(4, int(8 * s))):
+            if dark_bg and not self._on_dark_bar(img[y0:y1, x0:x1], mask[y0:y1, x0:x1], dark_bg):
+                continue
             res = self.rapid(np.ascontiguousarray(img[y0:y1, x0:x1]), use_det=False, use_cls=False)
             if res.txts and res.scores[0] >= min_score:
                 out.append(_fix_rapid(res.txts[0]))
         return out
+
+    @staticmethod
+    def _on_dark_bar(img: np.ndarray, mask: np.ndarray, max_h: float) -> bool:
+        """選項的字在半透明深色底條上（字以外的亮度中位數約 70）；亮色景物被誤切成的行背景約 200 以上。
+        真正的一行選項高度約 45px（1080p），比 max_h 高的是一大片亮色景物。"""
+        import cv2
+
+        if img.shape[0] > max_h:
+            return False
+        near = cv2.dilate(mask.astype(np.uint8), np.ones((5, 5), np.uint8)) > 0
+        bg = img[..., :3].max(axis=2)[~near]
+        return bg.size > 0 and float(np.median(bg)) < 150
 
     def read_name(self, frame: np.ndarray) -> str:
         crop = self._crop(frame, self.regions["name"]).astype(np.int16)
@@ -361,7 +378,8 @@ class DialogueReader:
     def read_options(self, frame: np.ndarray) -> list[str]:
         crop = self._crop(frame, self.regions["options"])
         if self.rapid:
-            lines = [clean_option(s) for s in self._rapid_lines(crop, crop.min(axis=2) >= 200)]
+            max_h = 90 * frame.shape[0] / BASE_H
+            lines = [clean_option(s) for s in self._rapid_lines(crop, crop.min(axis=2) >= 200, dark_bg=max_h)]
             return [s for s in lines if len(s) >= 2 and _CJK.search(s)]  # 沒有中文字的多半是圖示、背景雜訊
         lines = [clean_option(s) for s in self._ocr_lines(crop)]
         return [s for s in lines if len(s) >= 2]

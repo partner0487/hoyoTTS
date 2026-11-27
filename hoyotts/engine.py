@@ -69,6 +69,27 @@ def same_options(a: list[str] | None, b: list[str], strict: bool = False) -> boo
     return all(max(_similar(s, x) for x in big) >= 80 for s in small)
 
 
+def options_changed(spoken: list[str] | None, cur: list[str]) -> bool:
+    """穩定下來的這組選項要不要（重）念。
+    - 還沒念過：要。
+    - 讀到的都念過了（少讀一兩項）：不用。
+    - 念過的都還在、而且多出新的（淡入動畫時先只讀到一部分）：整組重念。
+    - 只有一項的字不一樣（OCR 把同一項認成別的字，或背景雜訊每次認成不同字）：不用。"""
+    if not spoken:
+        return True
+
+    def found(x: str, group: list[str]) -> bool:
+        return any(_similar(x, y) >= 80 for y in group)
+
+    new = sum(not found(x, spoken) for x in cur)
+    missing = sum(not found(x, cur) for x in spoken)
+    if new == 0:
+        return False
+    if missing == 0:
+        return True
+    return not (new == 1 and missing == 1 and len(cur) == len(spoken) >= 2)
+
+
 @dataclass
 class Utterance:
     kind: str  # "line" / "options" / "test"
@@ -350,8 +371,7 @@ class Engine:
                             best = last_opts
                             stable = opt_count >= self.cfg["stable_frames"] and now - opt_since >= 0.5
                             # 念過的那組少了幾項（例如動畫還沒跑完），現在讀到更多：整組重念
-                            new = not same_options(spoken_opts, best) or len(best) > len(spoken_opts or [])
-                            if stable and new:
+                            if stable and options_changed(spoken_opts, best):
                                 spoken_opts = best
                                 self._on_options(best)
                         else:
