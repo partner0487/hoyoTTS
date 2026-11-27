@@ -750,7 +750,11 @@ def run() -> None:
 
 
 def ctypes_dpi() -> None:
-    """高 DPI 螢幕下字不要糊掉。"""
+    """高 DPI 螢幕下字不要糊掉；並設定自己的 AppUserModelID，工作列才會顯示 hoyoTTS 的圖示而不是 Python 的。"""
     import ctypes
 
     ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("hoyoTTS.app")
+    except (AttributeError, OSError):
+        pass

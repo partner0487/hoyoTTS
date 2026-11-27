@@ -72,14 +72,16 @@ def design_b():
     img = _rounded_base()
     d = ImageDraw.Draw(img)
     _bars(d, 512, 420, [120, 230, 330, 400, 330, 230, 120], 54, 34, WHITE)
-    # 分隔線：兩段金線，中間菱形
-    y = 690
+    _divider(d)
+    return img
+
+
+def _divider(d, y=690):
+    """劇情對話框的分隔線：兩段粉線、中間菱形，下面一條白線（代表台詞）。"""
     d.rounded_rectangle((170, y - 12, 440, y + 12), 12, fill=GOLD)
     d.rounded_rectangle((584, y - 12, 854, y + 12), 12, fill=GOLD)
     d.polygon([(512, y - 46), (558, y), (512, y + 46), (466, y)], fill=GOLD)
-    # 下方兩行字（淡）
-    d.rounded_rectangle((270, 770, 754, 800), 15, fill=(255, 255, 255, 150))
-    return img
+    d.rounded_rectangle((270, y + 80, 754, y + 110), 15, fill=(196, 212, 244))  # 實色淡藍白（半透明會直接蓋掉底色、透出背景）
 
 
 def design_c():
@@ -130,11 +132,13 @@ def design_d():
 
 
 def design_e():
-    """保留中間的四芒星（粉色），兩邊翅膀變成聲波。"""
+    """中間白色四芒星，兩邊翅膀變成聲波（往中間越來越高），下方是 B 的粉色分隔線和白線。"""
     img = _rounded_base()
     d = ImageDraw.Draw(img)
-    _wing_bars(d, 512, 165, 58, [215, 180, 145, 110, 76], [545, 566, 590, 618, 652], 38, WHITE)
-    _star(d, 512, 450, 150, PINK)
+    cy = 420
+    _wing_bars(d, 512, 210, 58, [250, 195, 145, 100], [cy] * 4, 40, WHITE)
+    _star(d, 512, cy, 150, WHITE)
+    _divider(d)
     return img
 
 
