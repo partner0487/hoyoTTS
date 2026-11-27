@@ -91,6 +91,8 @@ def _setup_style(root: tk.Tk) -> None:
                  indicatorforeground="#ffffff")
     st.map("TCheckbutton", background=[("active", CARD)],
            indicatorbackground=[("selected", GREEN), ("active", GREEN_SOFT)])
+    st.configure("Bar.TCheckbutton", background=BG, foreground=GREEN_DARK, font=FONT_BOLD)
+    st.map("Bar.TCheckbutton", background=[("active", BG)])
     st.configure("TEntry", fieldbackground=CARD, bordercolor=BORDER, lightcolor=CARD, padding=4)
     st.map("TEntry", bordercolor=[("focus", GREEN)], lightcolor=[("focus", GREEN)])
     for w in ("TCombobox", "TSpinbox"):
@@ -186,6 +188,9 @@ class App:
         ttk.Button(bar, text=f"⏹ 停止這句  {hk['stop']}", command=self.engine.interrupt).pack(side="left", padx=(6, 0))
         ttk.Button(bar, text=f"↻ 重念  {hk['replay']}", command=self.engine.replay).pack(side="left", padx=(6, 0))
         ttk.Button(bar, text="擷取預覽", command=self.show_preview).pack(side="right")
+        self.var_auto_play = tk.BooleanVar(value=self.cfg["auto_play"].get("enabled", False))
+        ttk.Checkbutton(bar, text="自動過劇情", style="Bar.TCheckbutton", variable=self.var_auto_play,
+                        command=self._toggle_auto_play).pack(side="right", padx=(0, 14))
 
     def _build_current(self):
         """目前對話卡片，左邊一條綠色色帶。"""
@@ -281,9 +286,17 @@ class App:
         ttk.Label(tail, text="秒就先念完這句").pack(side="left")
         ttk.Label(p, text="（0＝一律立刻打斷；剩比較多才點會當作跳過）", style="Muted.TLabel").grid(
             row=3, column=1, columnspan=2, sticky="w", padx=10)
+        ttk.Label(p, text="自動過劇情").grid(row=4, column=0, sticky="w", pady=4)
+        auto = ttk.Frame(p, style="Card.TFrame")
+        auto.grid(row=4, column=1, columnspan=2, sticky="w", padx=10)
+        ttk.Label(auto, text="念完後等").pack(side="left")
+        self.var_auto_delay = tk.StringVar(value=f"{self.cfg['auto_play'].get('delay', 0.6):g}")
+        ttk.Spinbox(auto, from_=0, to=5, increment=0.1, width=5, textvariable=self.var_auto_delay,
+                    command=self._apply_live).pack(side="left", padx=4)
+        ttk.Label(auto, text="秒再點下一段").pack(side="left")
         hk = self.cfg["hotkeys"]
         self.hk_entries = {}
-        for i, (label, key) in enumerate([("停止這句", "stop"), ("暫停／繼續", "pause"), ("重念", "replay")], start=4):
+        for i, (label, key) in enumerate([("停止這句", "stop"), ("暫停／繼續", "pause"), ("重念", "replay")], start=5):
             ttk.Label(p, text=f"快捷鍵：{label}").grid(row=i, column=0, sticky="w", pady=4)
             e = ttk.Entry(p, width=12)
             e.insert(0, hk[key])
@@ -389,11 +402,30 @@ class App:
         self.hotkeys.start({hk["stop"]: ui(self.engine.interrupt), hk["pause"]: ui(self.toggle_pause),
                             hk["replay"]: ui(self.engine.replay)})
 
+    def _toggle_auto_play(self):
+        from .gameinput import is_admin
+
+        on = self.var_auto_play.get()
+        self.cfg["auto_play"]["enabled"] = on
+        save_config(self.cfg)
+        if on:
+            self.log("自動過劇情：開啟（台詞念完自動點擊，選項念完按 "
+                     f"{self.cfg['auto_play'].get('option_key', 'F')} 選第一個；遊戲要在前景）")
+            if not is_admin():
+                self.log("⚠ hoyoTTS 不是以系統管理員身分執行，原神會擋掉自動點擊。"
+                         "請關掉後在 run.bat 上按右鍵 →「以系統管理員身分執行」")
+        else:
+            self.log("自動過劇情：關閉")
+
     def _apply_live(self):
         self.cfg["volume"] = round(self.var_vol.get(), 2)
         self.cfg["speed"] = round(self.var_speed.get(), 2)
         try:
             self.cfg["finish_tail"] = min(10.0, max(0.0, round(float(self.var_tail.get()), 1)))
+        except ValueError:
+            pass
+        try:
+            self.cfg["auto_play"]["delay"] = min(5.0, max(0.0, round(float(self.var_auto_delay.get()), 1)))
         except ValueError:
             pass
 

@@ -74,6 +74,7 @@ class Utterance:
     voice: Voice
     gen: int
     note: str = ""
+    items: list[str] = field(default_factory=list)  # 選項（kind="options"）
 
 
 @dataclass
@@ -126,6 +127,7 @@ class Engine:
         self._playing: Utterance | None = None
         self._play_lock = threading.Lock()
         self._server_ready = threading.Event()
+        self._auto_warned = False
 
     # ---------- 控制 ----------
     def start(self) -> None:
@@ -322,7 +324,7 @@ class Engine:
         if v is None or self.state.paused:
             return
         text = "".join(o if o[-1] in "。！？!?…" else o + "。" for o in options)
-        self._enqueue(Utterance("options", "選項", text, v, self._gen))  # 不打斷，排在台詞後面
+        self._enqueue(Utterance("options", "選項", text, v, self._gen, items=list(options)))  # 不打斷，排在台詞後面
 
     def _enqueue(self, u: Utterance) -> None:
         self._q.put(u)
@@ -377,8 +379,55 @@ class Engine:
             # u.gen 可能被 interrupt(keep_playing) 改成新的，所以用 >= 判斷還要不要繼續念
             while self.player.busy() and u.gen >= self._gen and not self._stop.is_set():
                 time.sleep(0.05)
+            if u.gen == self._gen and not self._stop.is_set() and u.kind in ("line", "options"):
+                self._schedule_advance(u)  # 自然念完（沒被打斷）
             with self._play_lock:
                 if self._playing is u:
                     self._playing = None
                     if u.gen == self._gen:
                         self.state.speaking = ""
+
+    # ---------- 自動過劇情 ----------
+    def _schedule_advance(self, u: Utterance) -> None:
+        ap = self.cfg.get("auto_play", {})
+        if ap.get("enabled"):
+            threading.Thread(target=self._advance, args=(u, self._gen), daemon=True).start()
+
+    def _advance(self, u: Utterance, gen: int) -> None:
+        """念完後確認畫面還停在剛念的那句（或那組選項），而且沒有別的在排隊，才點下一段。
+        玩家自己先點過去了、或還有選項要念，就什麼都不做。"""
+        from . import gameinput as gi
+
+        ap = self.cfg.get("auto_play", {})
+        if self._stop.wait(float(ap.get("delay", 0.6))):
+            return
+        s = self.state
+        if (gen != self._gen or not ap.get("enabled") or s.paused or not s.in_dialogue
+                or not self._q.empty() or not self._play_q.empty() or self._synthesizing or self.player.busy()):
+            return
+        if u.kind == "line":
+            if not s.text or _similar(s.text, u.text) < 85:
+                return  # 畫面已經換句了
+            action = "options" if s.options else "click"
+            if action == "options" and self.cfg.get("read_options", True):
+                return  # 選項還沒念，等念完選項再按
+        else:
+            if not same_options(u.items, s.options):
+                return
+            action = "options"
+        hwnd = self.capture.hwnd
+        if not gi.is_foreground(hwnd):
+            return  # 遊戲不在前景，不送任何輸入
+        before = s.text
+        if action == "click":
+            x, y = ap.get("click", [960, 950])
+            gi.click_at(hwnd, x, y)
+        else:
+            gi.press_key(ap.get("option_key", "F"))
+        self.log(f"自動過劇情：{'點擊對話框' if action == 'click' else '按 ' + ap.get('option_key', 'F') + ' 選擇選項'}")
+        # 點了 2 秒畫面都沒變：多半是權限不夠（UIPI 會默默擋掉）
+        if self._stop.wait(2.0) or self._auto_warned:
+            return
+        if gen == self._gen and self.state.in_dialogue and self.state.text == before and not gi.is_admin():
+            self._auto_warned = True
+            self.log("自動過劇情好像沒有作用：原神以系統管理員身分執行，請用系統管理員身分開啟 hoyoTTS")
