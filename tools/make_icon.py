@@ -1,7 +1,7 @@
 """產生 hoyoTTS 的圖示（assets/icon_*.png、assets/icon.ico）。
 
     python tools/make_icon.py            產生全部設計和預覽圖 assets/icon_preview.png
-    python tools/make_icon.py a          把設計 a 設為程式圖示（assets/icon.ico、assets/icon.png）
+    python tools/make_icon.py e          把設計 e 設為程式圖示（assets/icon.ico、assets/icon.png）
 
 以 1024px 繪製再縮小，邊緣才平滑。
 """
@@ -97,11 +97,53 @@ def design_c():
     return img
 
 
-DESIGNS = {"a": ("對話泡泡＋聲波", design_a), "b": ("粉色分隔線＋聲波", design_b), "c": ("文字→聲波", design_c)}
+PINK = (232, 115, 158)
+
+
+def _star(d, cx, cy, r, color, p=0.55):
+    """四芒星（四邊往內凹）：超橢圓 |x|^p + |y|^p = 1，p < 1 時四邊內凹。"""
+    pts = []
+    for i in range(128):
+        t = i / 128 * 2 * math.pi
+        c, s = math.cos(t), math.sin(t)
+        k = (abs(c) ** p + abs(s) ** p) ** (-1 / p)
+        pts.append((cx + r * c * k, cy + r * s * k))
+    d.polygon(pts, fill=color)
+
+
+def _wing_bars(d, cx, start, step, heights, centers, w, color):
+    """左右對稱的翅膀聲波：離中心 start + i*step，靠內粗高、往外變短並往下彎（像頭冠的翅膀）。"""
+    for i, (h, cy) in enumerate(zip(heights, centers)):
+        off = start + i * step
+        for x in (cx - off, cx + off):
+            d.rounded_rectangle((x - w / 2, cy - h / 2, x + w / 2, cy + h / 2), w / 2, fill=color)
+
+
+# 原神 LOGO 頭冠的意象：中間一顆四芒星，兩邊各一道翅膀，翅膀靠星星那頭粗、往外變細並往下彎。
+def design_d():
+    """頭冠整個變成聲波：中間最高那條（粉色）是星星，兩邊往外漸短往下彎的是翅膀。"""
+    img = _rounded_base()
+    d = ImageDraw.Draw(img)
+    _wing_bars(d, 512, 68, 62, [250, 205, 170, 135, 100, 68], [505, 530, 552, 576, 604, 636], 40, WHITE)
+    d.rounded_rectangle((512 - 23, 270, 512 + 23, 690), 23, fill=PINK)
+    return img
+
+
+def design_e():
+    """保留中間的四芒星（粉色），兩邊翅膀變成聲波。"""
+    img = _rounded_base()
+    d = ImageDraw.Draw(img)
+    _wing_bars(d, 512, 165, 58, [215, 180, 145, 110, 76], [545, 566, 590, 618, 652], 38, WHITE)
+    _star(d, 512, 450, 150, PINK)
+    return img
+
+
+DESIGNS = {"a": ("對話泡泡＋聲波", design_a), "b": ("粉色分隔線＋聲波", design_b), "c": ("文字→聲波", design_c),
+           "d": ("頭冠聲波", design_d), "e": ("星星＋翅膀聲波", design_e)}
 
 
 def preview(imgs):
-    """三個設計在 256 / 64 / 32 / 16px 下的樣子，淺色和深色底各一排。"""
+    """各設計在 256 / 64 / 32 / 16px 下的樣子，淺色和深色底各一排。"""
     cell = 300
     font = None
     for f in ("msjhbd.ttc", "msjh.ttc"):
