@@ -11,3 +11,12 @@ requests
 soundfile
 sounddevice
 resampy
+# RapidOCR（文字辨識）需要的套件。rapidocr 本身要用 --no-deps 另外裝（見 README），
+# 否則會多裝 opencv-python-headless 跟 opencv-python 衝突、還會把 numpy 升到 2。
+pyclipper
+shapely
+omegaconf
+colorlog
+pyyaml
+tqdm
+six

@@ -141,7 +141,7 @@ class Engine:
         self.state.running = True
         self.capture.start()
         if self.reader is None:
-            self.reader = DialogueReader(self.cfg["regions"])
+            self.reader = DialogueReader(self.cfg["regions"], engine=self.cfg.get("ocr_engine", "rapid"))
             self.reader.is_known = lambda n: self.library.match(t2s(n)) is not None
         self._threads = [
             threading.Thread(target=self._server_thread, name="server", daemon=True),

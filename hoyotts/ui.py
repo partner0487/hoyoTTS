@@ -646,7 +646,7 @@ class App:
 
         from .dialogue import DialogueReader
 
-        reader = self.engine.reader or DialogueReader(self.cfg["regions"])
+        reader = self.engine.reader or DialogueReader(self.cfg["regions"], engine=self.cfg.get("ocr_engine", "rapid"))
         self.engine.reader = reader
         st = reader.read(frame)
         img = reader.debug_image(frame)

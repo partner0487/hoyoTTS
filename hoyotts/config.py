@@ -23,6 +23,8 @@ DEFAULTS: dict = {
     },
     "aliases": {},  # OCR 角色名（簡體）→ 模型名，例如 {"旅行者": "空"}
     "read_options": True,
+    # 文字辨識："rapid"＝RapidOCR（PaddleOCR 模型，較準，讀不到時才用 Windows OCR）；"windows"＝只用 Windows OCR
+    "ocr_engine": "rapid",
     "volume": 1.0,
     "speed": 1.0,
     "sample_steps": 32,

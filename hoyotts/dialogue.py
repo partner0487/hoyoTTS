@@ -93,9 +93,40 @@ def merge_insertions(base: str, other: str) -> str:
     return "".join(out)
 
 
+def _make_rapid():
+    """RapidOCR，只用 PP-OCRv6 small 辨識模型（套件內建，不用下載），CPU 跑。沒裝就回傳 None。"""
+    try:
+        from rapidocr import LangRec, ModelType, OCRVersion, RapidOCR
+    except ImportError:
+        return None
+    return RapidOCR(params={"Global.log_level": "error", "Rec.ocr_version": OCRVersion.PPOCRV6,
+                            "Rec.model_type": ModelType.SMALL, "Rec.lang_type": LangRec.CH})
+
+
+def _fix_rapid(s: str) -> str:
+    """RapidOCR 的輸出習慣：「...」是刪節號。"""
+    return re.sub(r"\.{2,}", "…", s)
+
+
+def _split_lines(mask: np.ndarray, min_h: int = 12, pad: int = 8) -> list[tuple[int, int, int, int]]:
+    """mask（字的遮罩）水平投影切行，回傳每行 (y0, y1, x0, x1)，上下左右留一點邊。太矮的（例如「……」的點）不算。"""
+    rows = mask.sum(axis=1) > 2
+    h, w = mask.shape
+    out = []
+    for a, b in DialogueReader._runs(rows, 1):
+        if b - a + 1 < min_h:
+            continue
+        cols = np.flatnonzero(mask[a:b + 1].any(axis=0))
+        out.append((max(0, a - pad), min(h, b + 1 + pad), max(0, int(cols[0]) - 12), min(w, int(cols[-1]) + 13)))
+    return out
+
+
 class DialogueReader:
-    def __init__(self, regions: dict, ocr_reader=None, ocr_reader_1x=None):
+    def __init__(self, regions: dict, ocr_reader=None, ocr_reader_1x=None, engine: str = "rapid"):
+        """engine="rapid"：主要用 RapidOCR（PaddleOCR PP-OCRv6 模型，只跑辨識），讀不到時才用 Windows OCR；
+        "windows"：只用 Windows OCR。沒裝 rapidocr 會自動改用 Windows OCR。"""
         self.regions = regions
+        self.rapid = _make_rapid() if engine == "rapid" else None
         import screen_ocr
 
         self.ocr = ocr_reader or screen_ocr.Reader.create_quality_reader(resize_factor=2)
@@ -170,6 +201,17 @@ class DialogueReader:
         lines = sorted((l for l in res.result.lines if l.words), key=lambda l: min(w.top for w in l.words))
         return [_join_words(_fix_dashes(line.words)) for line in lines]
 
+    def _rapid_lines(self, img: np.ndarray, mask: np.ndarray, min_score: float = 0.5) -> list[str]:
+        """用字的遮罩做水平投影切出每一行（由上往下），每行裁到字的範圍再丟給 RapidOCR 辨識。
+        我們已經知道文字在哪，不用跑文字偵測（偵測要近 1 秒，只辨識一行十幾毫秒）。"""
+        s = img.shape[0] / 97 if img.shape[0] < 300 else 1.0
+        out = []
+        for y0, y1, x0, x1 in _split_lines(mask, min_h=max(8, int(12 * s)), pad=max(4, int(8 * s))):
+            res = self.rapid(np.ascontiguousarray(img[y0:y1, x0:x1]), use_det=False, use_cls=False)
+            if res.txts and res.scores[0] >= min_score:
+                out.append(_fix_rapid(res.txts[0]))
+        return out
+
     def read_name(self, frame: np.ndarray) -> str:
         crop = self._crop(frame, self.regions["name"]).astype(np.int16)
         gold = (crop[..., 0] > 180) & (crop[..., 1] > 120) & (crop[..., 2] < 120)
@@ -178,7 +220,11 @@ class DialogueReader:
         key = np.packbits(gold).tobytes()
         if self._name_cache and self._name_cache[0] == key:
             return self._name_cache[1]  # 同一句台詞名字不變，不用每幀重認
-        name = self._ocr_name(gold, crop)
+        name = ""
+        if self.rapid:
+            name = clean_text("".join(self._rapid_lines(crop.clip(0, 255).astype(np.uint8), gold)))
+        if not name:
+            name = self._ocr_name(gold, crop)
         self._name_cache = (key, name)
         return name
 
@@ -226,6 +272,18 @@ class DialogueReader:
         crop = self._crop(frame, self.text_box(div))
         gray = crop[..., :3].min(axis=2)
         bg = float(np.median(gray))
+        if self.rapid:
+            if bg > 140:  # 淺色背景：只留白字轉成白底黑字再認
+                mask = gray >= min(250, max(225, bg + 10))
+                img = np.stack([np.where(mask, 0, 255).astype(np.uint8)] * 3, -1)
+            else:
+                mask, img = gray >= 200, crop
+            text = clean_text("".join(self._rapid_lines(img, mask)))
+            if _CJK.search(text) or _ASCII_WORD.search(text):
+                return text
+            if self._only_dots(crop):
+                return "……"
+            # 讀不到：交給下面的 Windows OCR 再試
         if bg > 140:
             # 白字壓在淺色背景（白衣服、雪地）上對比太低，會漏字：只留白字轉成白底黑字再認。
             # 背景很亮時門檻跟著提高（至少比背景亮 10）
@@ -301,7 +359,11 @@ class DialogueReader:
         return len(dots) >= 2 and all(b - a <= 10 * s for a, b in dots)
 
     def read_options(self, frame: np.ndarray) -> list[str]:
-        lines = [clean_option(s) for s in self._ocr_lines(self._crop(frame, self.regions["options"]))]
+        crop = self._crop(frame, self.regions["options"])
+        if self.rapid:
+            lines = [clean_option(s) for s in self._rapid_lines(crop, crop.min(axis=2) >= 200)]
+            return [s for s in lines if len(s) >= 2 and _CJK.search(s)]  # 沒有中文字的多半是圖示、背景雜訊
+        lines = [clean_option(s) for s in self._ocr_lines(crop)]
         return [s for s in lines if len(s) >= 2]
 
     def read(self, frame: np.ndarray, with_options: bool = True) -> DialogueState:

@@ -57,6 +57,8 @@ pip install -r GPT-SoVITS/requirements.txt
 
 # hoyoTTS 的依賴（會把 numpy 固定在 2 以下）
 pip install -r requirements.txt
+# 文字辨識 RapidOCR（要 --no-deps：不然會多裝 opencv-python-headless、把 numpy 升到 2）
+pip install --no-deps rapidocr==3.10.0
 
 # GPT-SoVITS 底模、G2PW、NLTK、Open JTalk 字典
 python tools/setup_gsv.py
@@ -140,14 +142,14 @@ python main.py --nogui
 ## 運作方式
 
 ```
-遊戲視窗 ──WGC──▶ 畫面 ──▶ 偵測對話框分隔線 ──▶ Windows OCR（角色名／台詞／選項）
+遊戲視窗 ──WGC──▶ 畫面 ──▶ 偵測對話框分隔線 ──▶ RapidOCR（角色名／台詞／選項）
                                                         │ 繁轉簡、比對角色名
                                                         ▼
             喇叭 ◀── 播放 ◀── GPT-SoVITS api_v2（本機，tts_server.py 啟動）
 ```
 
 - `hoyotts/capture.py`：擷取遊戲視窗（WGC，失敗時改用 GDI）。
-- `hoyotts/dialogue.py`：判斷對話、OCR。亮背景上 Windows OCR 放大 2 倍會漏字，所以會再用原尺寸辨識一次，補回漏掉的字。
+- `hoyotts/dialogue.py`：判斷對話、OCR。用 RapidOCR（PaddleOCR PP-OCRv6 small 模型，CPU）：已經知道文字在哪，自己切出每一行只跑辨識，一行十幾毫秒。讀不到時才改用 Windows OCR（再加上放大、前綴等補救）。設定檔 `"ocr_engine": "windows"` 可以改回只用 Windows OCR。
 - `hoyotts/engine.py`：主流程。台詞連續兩幀相同才念（等打字動畫），用相似度比對避免背景動畫造成的 OCR 雜訊重複觸發。
 - `hoyotts/voices.py`：角色模型的下載、載入與角色名比對（容忍 OCR 錯一兩個字）。
 - `hoyotts/tts.py`：啟動與呼叫 GPT-SoVITS、播放。
@@ -168,7 +170,7 @@ python main.py --nogui
 - 語音合成：[GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS)（MIT）
 - 角色模型：[AI Hobbyist](https://www.ai-hobbyist.com/) 的 [GPT-SoVITS_Model_Collection](https://www.modelscope.cn/models/aihobbyist/GPT-SoVITS_Model_Collection)，以 [CC-BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) 授權，訓練資料來自 [Genshin_Datasets](https://github.com/AI-Hobbyist/Genshin_Datasets)。**禁止商業用途與二次散布模型。**
 - 原神的角色、語音等版權屬於米哈遊。
-- OCR：[screen-ocr](https://github.com/wolfmanstout/screen-ocr)（Windows OCR）
+- OCR：[RapidOCR](https://github.com/RapidAI/RapidOCR)（[PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) 模型）、[screen-ocr](https://github.com/wolfmanstout/screen-ocr)（Windows OCR，備援）
 
 本專案程式碼採用 [MIT 授權](LICENSE)。
 
