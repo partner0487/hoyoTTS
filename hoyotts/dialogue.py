@@ -24,6 +24,7 @@ BASE_W, BASE_H = 1920, 1080
 # OCR 常見誤判
 _FIXES = str.maketrans({"亅": "」", "『": "「", "』": "」", "囗": "口", "|": ""})
 _ASCII_WORD = re.compile(r"[A-Za-z0-9]")
+_CJK = re.compile("[㐀-鿿]")
 
 
 @dataclass
@@ -223,11 +224,65 @@ class DialogueReader:
 
     def read_text(self, frame: np.ndarray, div: Divider | None = None) -> str:
         crop = self._crop(frame, self.text_box(div))
+        gray = crop[..., :3].min(axis=2)
+        bg = float(np.median(gray))
+        if bg > 140:
+            # 白字壓在淺色背景（白衣服、雪地）上對比太低，會漏字：只留白字轉成白底黑字再認。
+            # 背景很亮時門檻跟著提高（至少比背景亮 10）
+            thr = min(250, max(225, bg + 10))
+            crop = np.stack([np.pad(np.where(gray >= thr, 0, 255).astype(np.uint8), 30, constant_values=255)] * 3, -1)
+            base = "".join(self._ocr_lines(crop))
+            if not base:
+                return self._read_short_mask(crop[..., 0] == 0, gray.shape[0])
+            return clean_text(merge_insertions(base, "".join(self._ocr_lines(crop, self.ocr_1x))))
         base = "".join(self._ocr_lines(crop))
         if not base:
             # 台詞只有「……」時 OCR 什麼都讀不到；不補上的話這句不會念、也不會自動過，就卡住了
-            return "……" if self._only_dots(crop) else ""
+            if self._only_dots(crop):
+                return "……"
+            # 很短的台詞（「唉…」）、或白字壓在淺色背景上，OCR 也常整個放棄
+            return self._read_short(crop)
+        if not _CJK.search(base):
+            # 淺色背景上偶爾讀出「00 0」這種沒有中文字的亂碼：備援讀得到中文就用備援的
+            short = self._read_short(crop)
+            if _CJK.search(short):
+                return short
         return clean_text(merge_insertions(base, "".join(self._ocr_lines(crop, self.ocr_1x))))
+
+    _PREFIX = "台詞內容是"
+
+    def _read_short(self, crop: np.ndarray) -> str:
+        """OCR 讀不到時的備援：只留白字轉成白底黑字，前面接一段粗體的已知文字（Windows OCR 對只有一兩個字的
+        圖片常常整個不認，接成一整句就認得），認完再把前綴拿掉。"""
+        return self._read_short_mask(crop[..., :3].min(axis=2) >= 225, crop.shape[0])
+
+    def _read_short_mask(self, white: np.ndarray, crop_h: int | None = None) -> str:
+        """white：白字的遮罩。crop_h：台詞區的原始高度（用來換算字高；遮罩有加白邊時要另外給）。"""
+        from PIL import ImageDraw, ImageFont
+
+        ys, xs = np.nonzero(white)
+        if len(xs) < 30:
+            return ""
+        s = (crop_h or white.shape[0]) / 97
+        h = ys.max() - ys.min() + 1
+        if h > 40 * s:  # 兩行以上：前綴照一行的高度
+            h = int(27 * s)
+        try:
+            font = ImageFont.truetype("msjhbd.ttc", max(12, int(h)))
+        except OSError:
+            return ""
+        text = Image.fromarray(np.where(white[ys.min():ys.max() + 1, xs.min():xs.max() + 1], 0, 255).astype(np.uint8))
+        w = int(ImageDraw.Draw(text).textlength(self._PREFIX, font=font))
+        img = Image.new("L", (w + text.width + 100, text.height + 80), 255)
+        ImageDraw.Draw(img).text((40, 40), self._PREFIX, font=font, fill=0, anchor="lt")
+        img.paste(text, (40 + w + 4, 40))
+        arr = np.stack([np.array(img)] * 3, -1)
+        cands = []
+        for rd in (self.ocr_1x, self.ocr):
+            res = "".join(self._ocr_lines(arr, rd))
+            if res.startswith(self._PREFIX) and len(res) > len(self._PREFIX):
+                cands.append(res[len(self._PREFIX):])
+        return clean_text(max(cands, key=len)) if cands else ""
 
     @staticmethod
     def _only_dots(crop: np.ndarray) -> bool:
