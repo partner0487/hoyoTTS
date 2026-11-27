@@ -223,8 +223,25 @@ class DialogueReader:
         crop = self._crop(frame, self.text_box(div))
         base = "".join(self._ocr_lines(crop))
         if not base:
-            return ""
+            # 台詞只有「……」時 OCR 什麼都讀不到；不補上的話這句不會念、也不會自動過，就卡住了
+            return "……" if self._only_dots(crop) else ""
         return clean_text(merge_insertions(base, "".join(self._ocr_lines(crop, self.ocr_1x))))
+
+    @staticmethod
+    def _only_dots(crop: np.ndarray) -> bool:
+        """台詞區是不是只有一排小白點（「……」：1080p 下每點約 4×4px、間隔約 10px）。"""
+        h = crop.shape[0]
+        s = h / 97  # 台詞區在 1080p 約 97px 高
+        white = crop[..., :3].min(axis=2) > 200
+        ys, xs = np.nonzero(white)
+        if len(xs) < 20 or len(xs) > 2000 * s * s:
+            return False
+        if ys.max() - ys.min() > 10 * s:
+            return False  # 不在同一橫排（有一般的字或亮色背景）
+        cols = np.zeros(crop.shape[1], bool)
+        cols[xs] = True
+        dots = DialogueReader._runs(cols, 1)
+        return len(dots) >= 2 and all(b - a <= 10 * s for a, b in dots)
 
     def read_options(self, frame: np.ndarray) -> list[str]:
         lines = [clean_option(s) for s in self._ocr_lines(self._crop(frame, self.regions["options"]))]

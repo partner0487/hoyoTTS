@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import queue
+import re
 import threading
 import time
 import traceback
@@ -25,6 +26,8 @@ from .capture import GameCapture
 from .dialogue import DialogueReader
 from .tts import Player, TTSClient, TTSServer
 from .voices import Voice, VoiceLibrary
+
+_SPEAKABLE = re.compile(r"[0-9A-Za-z㐀-鿿]")  # 有沒有能念的字
 
 _t2s = OpenCC("t2s")
 
@@ -355,6 +358,13 @@ class Engine:
                     continue
             self._stop_done.wait(3)
             if u.gen != self._gen:
+                continue
+            if not _SPEAKABLE.search(u.text):
+                # 「……」這種沒有字可念的台詞：不合成，停頓 1 秒（之後照樣自動過劇情）
+                import numpy as np
+
+                self.log("  ▶ 沒有字可念，停頓 1 秒")
+                self._play_q.put((u, np.zeros(16000, np.float32), 16000))
                 continue
             try:
                 t = time.time()
