@@ -84,11 +84,13 @@ def icon():
 
 def icon_small(size):
     """16～40px 用的簡化版：大版的細聲波、陰影和台詞線縮到這麼小會糊成一團。
-    以 24 格為單位設計（Win11 工作列 100% 縮放是 24px），聲波和分隔線都對齊像素格；
-    底色填滿整格、每邊兩條粗聲波、星星和分隔線加粗。先畫 16 倍大再縮小，邊緣才平滑。"""
+    底色填滿整格、每邊兩條粗聲波、星星和分隔線加粗。先畫 16 倍大再縮小，邊緣才平滑。
+    以 12 格設計（座標都用 24 的偶數，也就是 12 格的整數格）：一格在 24px 是 2 像素、36px 是 3 像素。
+    兩個螢幕縮放不同（100% 工作列 24px、150% 36px）時視窗只能給一張圖示，給 36px，
+    Windows 縮成 24px 時邊緣剛好也落在整數像素上，兩條工作列都清楚。"""
     k = 16
     N = size * k
-    u = N / 24  # 一格
+    u = N / 24  # 24 格的一格（下面的座標除了星星和菱形，都是偶數）
 
     def U(*v):
         return [x * u for x in v]
@@ -105,13 +107,13 @@ def icon_small(size):
     img.alpha_composite(body)
     d = ImageDraw.Draw(img)
     cy = 10
-    for x0, h in ((5, 8), (2, 4)):  # 由內往外：越外越矮
+    for x0, h in ((6, 8), (2, 4)):  # 由內往外：越外越矮
         for x in (x0, 24 - x0 - 2):
-            d.rounded_rectangle(U(x, cy - h / 2, x + 2, cy + h / 2), u, fill=WHITE)
-    _star(d, 12 * u, cy * u, 4 * u, WHITE)
-    d.rounded_rectangle(U(3, 17, 9.5, 19), u, fill=PINK)
-    d.rounded_rectangle(U(14.5, 17, 21, 19), u, fill=PINK)
-    d.polygon([tuple(U(12, 15.5)), tuple(U(14, 18)), tuple(U(12, 20.5)), tuple(U(10, 18))], fill=PINK)
+            d.rectangle(U(x, cy - h / 2, x + 2, cy + h / 2), fill=WHITE)
+    _star(d, 12 * u, cy * u, 3.6 * u, WHITE)
+    d.rectangle(U(2, 18, 10, 20), fill=PINK)
+    d.rectangle(U(14, 18, 22, 20), fill=PINK)
+    d.polygon([tuple(U(12, 16.5)), tuple(U(13.5, 19)), tuple(U(12, 21.5)), tuple(U(10.5, 19))], fill=PINK)
     return img.resize((size, size), Image.LANCZOS)
 
 
