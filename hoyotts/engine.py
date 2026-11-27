@@ -128,6 +128,7 @@ class Engine:
         self._play_lock = threading.Lock()
         self._server_ready = threading.Event()
         self._auto_warned = False
+        self._opts_seen: tuple[float, list[str]] = (0.0, [])  # 最後一次讀到選項的時間和內容
 
     # ---------- 控制 ----------
     def start(self) -> None:
@@ -263,7 +264,7 @@ class Engine:
         last_key, count = None, 0
         spoken_key = None
         last_opts, opt_count, spoken_opts = None, 0, None
-        out_since = None
+        out_since = opts_gone_since = None
         while not self._stop.is_set():
             t0 = time.time()
             try:
@@ -292,12 +293,18 @@ class Engine:
                         okey = list(st.options)
                         opt_count = opt_count + 1 if same_options(last_opts, okey, strict=True) else 1
                         last_opts = okey
-                        if opt_count >= self.cfg["stable_frames"]:
-                            if okey and not same_options(spoken_opts, okey):
-                                spoken_opts = okey
-                                self._on_options(okey)
-                            elif not okey:
+                        if okey:
+                            opts_gone_since = None
+                            self._opts_seen = (time.time(), okey)
+                        else:
+                            # 選項泡泡有呼吸動畫，OCR 每隔幾幀就會整個讀不到；連續消失 1.5 秒才算選項真的不見了，
+                            # 否則同一組選項會一直重念
+                            opts_gone_since = opts_gone_since or time.time()
+                            if time.time() - opts_gone_since > 1.5:
                                 spoken_opts = None
+                        if okey and opt_count >= self.cfg["stable_frames"] and not same_options(spoken_opts, okey):
+                            spoken_opts = okey
+                            self._on_options(okey)
             except Exception:
                 self.log("畫面辨識錯誤：\n" + traceback.format_exc(limit=3))
                 self._stop.wait(1)
@@ -406,14 +413,17 @@ class Engine:
         if (gen != self._gen or not ap.get("enabled") or s.paused or not s.in_dialogue
                 or not self._q.empty() or not self._play_q.empty() or self._synthesizing or self.player.busy()):
             return
+        # 選項泡泡有呼吸動畫，OCR 每隔幾幀會整個讀不到：看最近 1 秒內讀到的選項，不只看這一幀
+        t_seen, recent = self._opts_seen
+        options = s.options or (recent if time.time() - t_seen <= 1.0 else [])
         if u.kind == "line":
             if not s.text or _similar(s.text, u.text) < 85:
                 return  # 畫面已經換句了
-            action = "options" if s.options else "click"
+            action = "options" if options else "click"
             if action == "options" and self.cfg.get("read_options", True):
                 return  # 選項還沒念，等念完選項再按
         else:
-            if not same_options(u.items, s.options):
+            if not same_options(u.items, options):
                 return
             action = "options"
         hwnd = self.capture.hwnd
