@@ -39,6 +39,10 @@ PINK_DARK = "#c4507b"
 PINK_HOVER = "#f08bb0"
 PINK_SOFT = "#fbe1ea"
 
+# 自動過劇情的選項：顯示文字 → 設定值
+LINE_ACTIONS = {"空白鍵": "space", "滑鼠點擊": "click"}
+INPUT_METHODS = {"送到原神視窗（不動滑鼠，遊戲可在背景）": "window", "模擬鍵盤滑鼠（遊戲要在前景）": "screen"}
+
 # 標題列上的狀態燈（深藍底）
 OK, WARN, BAD, OFF = "#7ee0b0", "#ffd45c", "#ff7b7b", "#8a9cc0"
 
@@ -310,10 +314,23 @@ class App:
         self.var_auto_delay = tk.StringVar(value=f"{self.cfg['auto_play'].get('delay', 0.6):g}")
         ttk.Spinbox(auto, from_=0, to=5, increment=0.1, width=5, textvariable=self.var_auto_delay,
                     command=self._apply_live).pack(side="left", padx=4)
-        ttk.Label(auto, text="秒再點下一段").pack(side="left")
+        ttk.Label(auto, text="秒，台詞按").pack(side="left")
+        ap = self.cfg["auto_play"]
+        self.cb_line_action = ttk.Combobox(auto, values=list(LINE_ACTIONS), state="readonly", width=8)
+        self.cb_line_action.set(next((k for k, v in LINE_ACTIONS.items() if v == ap.get("line_action", "space")),
+                                     "空白鍵"))
+        self.cb_line_action.pack(side="left", padx=4)
+        ttk.Label(auto, text="、選項按 F").pack(side="left")
+        ttk.Label(p, text="送出方式").grid(row=5, column=0, sticky="w", pady=4)
+        self.cb_method = ttk.Combobox(p, values=list(INPUT_METHODS), state="readonly", width=34)
+        self.cb_method.set(next((k for k, v in INPUT_METHODS.items() if v == ap.get("method", "window")),
+                                list(INPUT_METHODS)[0]))
+        self.cb_method.grid(row=5, column=1, columnspan=2, sticky="w", padx=10)
+        for cb in (self.cb_line_action, self.cb_method):
+            cb.bind("<<ComboboxSelected>>", lambda e: self._apply_live())
         hk = self.cfg["hotkeys"]
         self.hk_entries = {}
-        for i, (label, key) in enumerate([("停止這句", "stop"), ("暫停／繼續", "pause"), ("重念", "replay")], start=5):
+        for i, (label, key) in enumerate([("停止這句", "stop"), ("暫停／繼續", "pause"), ("重念", "replay")], start=6):
             ttk.Label(p, text=f"快捷鍵：{label}").grid(row=i, column=0, sticky="w", pady=4)
             e = ttk.Entry(p, width=12)
             e.insert(0, hk[key])
@@ -428,8 +445,10 @@ class App:
         self.cfg["auto_play"]["enabled"] = on
         save_config(self.cfg)
         if on:
-            self.log("自動過劇情：開啟（台詞念完自動點擊，選項念完按 "
-                     f"{self.cfg['auto_play'].get('option_key', 'F')} 選第一個；遊戲要在前景）")
+            ap = self.cfg["auto_play"]
+            line = "點擊對話框" if ap.get("line_action") == "click" else "按空白鍵"
+            where = "（遊戲要在前景）" if ap.get("method") == "screen" else "（直接送給原神視窗）"
+            self.log(f"自動過劇情：開啟。台詞念完{line}，選項念完按 {ap.get('option_key', 'F')} 選第一個{where}")
             self._offer_admin(running=self.engine.state.running)
         else:
             self.log("自動過劇情：關閉")
@@ -473,6 +492,8 @@ class App:
             self.cfg["auto_play"]["delay"] = min(5.0, max(0.0, round(float(self.var_auto_delay.get()), 1)))
         except ValueError:
             pass
+        self.cfg["auto_play"]["line_action"] = LINE_ACTIONS.get(self.cb_line_action.get(), "space")
+        self.cfg["auto_play"]["method"] = INPUT_METHODS.get(self.cb_method.get(), "window")
 
     def save_settings(self):
         for key, cb in self.voice_combos.items():

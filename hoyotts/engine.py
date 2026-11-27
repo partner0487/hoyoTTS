@@ -427,18 +427,39 @@ class Engine:
                 return
             action = "options"
         hwnd = self.capture.hwnd
-        if not gi.is_foreground(hwnd):
-            return  # 遊戲不在前景，不送任何輸入
+        if not hwnd:
+            self.log("自動過劇情：找不到原神視窗，沒有動作")
+            return
+        # method="window"（預設）：直接送給原神視窗，不動滑鼠、遊戲在背景也可以
+        # method="screen"：模擬真的鍵盤滑鼠（送到前景視窗），所以只在原神是前景時才送
+        to_window = ap.get("method", "window") != "screen"
+        if not to_window and not gi.is_foreground(hwnd):
+            self.log("自動過劇情：原神不在前景，沒有動作（設定裡改成「送到原神視窗」就不用在前景）")
+            return
         before = s.text
         if action == "click":
-            x, y = ap.get("click", [960, 950])
-            gi.click_at(hwnd, x, y)
+            line_action = ap.get("line_action", "space")
+            what = "點擊對話框" if line_action == "click" else "按空白鍵"
         else:
-            gi.press_key(ap.get("option_key", "F"))
-        self.log(f"自動過劇情：{'點擊對話框' if action == 'click' else '按 ' + ap.get('option_key', 'F') + ' 選擇選項'}")
-        # 點了 2 秒畫面都沒變：多半是權限不夠（UIPI 會默默擋掉）
+            line_action = None
+            what = f"按 {ap.get('option_key', 'F')} 選擇選項"
+        try:
+            if line_action == "click":
+                x, y = ap.get("click", [960, 950])
+                gi.post_click(hwnd, x, y) if to_window else gi.click_at(hwnd, x, y)
+            else:
+                key = "SPACE" if line_action == "space" else ap.get("option_key", "F")
+                gi.post_key(hwnd, key) if to_window else gi.press_key(key)
+        except PermissionError as e:
+            self.log(f"自動過劇情：{e.args[1]}，請用系統管理員身分開啟 hoyoTTS")
+            return
+        self.log(f"自動過劇情：{what}")
+        # 送出 2 秒畫面都沒變：權限不夠（模擬輸入被 UIPI 默默擋掉），或遊戲不吃送到視窗的輸入
         if self._stop.wait(2.0) or self._auto_warned:
             return
-        if gen == self._gen and self.state.in_dialogue and self.state.text == before and not gi.is_admin():
+        if gen == self._gen and self.state.in_dialogue and self.state.text == before:
             self._auto_warned = True
-            self.log("自動過劇情好像沒有作用：原神以系統管理員身分執行，請用系統管理員身分開啟 hoyoTTS")
+            if not gi.is_admin():
+                self.log("自動過劇情好像沒有作用：原神以系統管理員身分執行，請用系統管理員身分開啟 hoyoTTS")
+            elif to_window:
+                self.log("自動過劇情好像沒有作用：可以到「設定 → 自動過劇情」把送出方式改成「模擬鍵盤滑鼠」試試")

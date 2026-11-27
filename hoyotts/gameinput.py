@@ -76,6 +76,43 @@ def is_foreground(hwnd: int | None) -> bool:
     return bool(hwnd) and user32.GetForegroundWindow() == hwnd
 
 
+# ---- 直接送到遊戲視窗（PostMessage）：不動到滑鼠游標和其他程式，遊戲不在前景也送得到 ----
+WM_ACTIVATE, WA_ACTIVE = 0x0006, 1
+WM_KEYDOWN, WM_KEYUP = 0x0100, 0x0101
+WM_MOUSEMOVE, WM_LBUTTONDOWN, WM_LBUTTONUP, MK_LBUTTON = 0x0200, 0x0201, 0x0202, 0x0001
+user32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+user32.PostMessageW.restype = wintypes.BOOL
+
+
+def _post(hwnd: int, msg: int, wparam: int, lparam: int) -> None:
+    if not user32.PostMessageW(hwnd, msg, wparam, lparam):
+        err = ctypes.get_last_error()
+        # 5 = ERROR_ACCESS_DENIED：UIPI 擋掉（hoyoTTS 權限比原神低）
+        raise PermissionError(err, "權限不足，原神擋掉了輸入" if err == 5 else f"PostMessage 失敗（{err}）")
+
+
+def post_key(hwnd: int, name: str) -> None:
+    """對遊戲視窗按一下鍵。"""
+    vk = VK[name.upper()]
+    scan = user32.MapVirtualKeyW(vk, MAPVK_VK_TO_VSC)
+    _post(hwnd, WM_ACTIVATE, WA_ACTIVE, 0)  # 遊戲在背景時不先「啟用」會忽略輸入
+    _post(hwnd, WM_KEYDOWN, vk, 1 | (scan << 16))
+    time.sleep(0.05)
+    _post(hwnd, WM_KEYUP, vk, 1 | (scan << 16) | (1 << 30) | (1 << 31))
+
+
+def post_click(hwnd: int, x: int, y: int, base=(1920, 1080)) -> None:
+    """對遊戲視窗的 (x, y)（以 1920×1080 為基準）點一下左鍵，不移動真的滑鼠。"""
+    l, t, r, b = client_rect_on_screen(hwnd)
+    cx, cy = int(x * (r - l) / base[0]), int(y * (b - t) / base[1])
+    pos = (cy << 16) | (cx & 0xFFFF)
+    _post(hwnd, WM_ACTIVATE, WA_ACTIVE, 0)
+    _post(hwnd, WM_MOUSEMOVE, 0, pos)
+    _post(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, pos)
+    time.sleep(0.05)
+    _post(hwnd, WM_LBUTTONUP, 0, pos)
+
+
 def press_key(name: str) -> None:
     """用掃描碼按一下（遊戲多半讀掃描碼）。"""
     vk = VK[name.upper()]

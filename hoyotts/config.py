@@ -31,8 +31,11 @@ DEFAULTS: dict = {
     # 念到剩不到這麼多秒時點下一段：先念完這句，下一句在背景合成好接著念。
     # 剩更多才點就當作要跳過，立刻打斷。0＝一律打斷。
     "finish_tail": 3.0,
-    # 自動過劇情：台詞念完點一下對話框，選項念完按 F 選第一個（遊戲要在前景；要以系統管理員身分執行）
-    "auto_play": {"enabled": False, "delay": 0.6, "click": [960, 950], "option_key": "F"},
+    # 自動過劇情：台詞念完按空白鍵（line_action="click" 改成點對話框），選項念完按 F 選第一個。
+    # method="window" 直接送給原神視窗（不動滑鼠、遊戲在背景也可以）；"screen" 模擬真的鍵盤滑鼠（遊戲要在前景）。
+    # 都要以系統管理員身分執行（原神是系統管理員身分）。
+    "auto_play": {"enabled": False, "delay": 0.6, "method": "window", "line_action": "space",
+                  "click": [960, 950], "option_key": "F"},
     "hotkeys": {"stop": "Ctrl+F7", "pause": "Ctrl+F8", "replay": "Ctrl+F9"},  # 單獨 F7–F9 常被其他程式占用，F1–F5 是遊戲的
     "regions": {
         "name": [560, 845, 1360, 895],
