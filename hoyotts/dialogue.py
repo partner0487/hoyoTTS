@@ -122,6 +122,33 @@ def _split_lines(mask: np.ndarray, min_h: int = 12, pad: int = 8) -> list[tuple[
     return out
 
 
+def _centered_lines(mask: np.ndarray, min_h: int = 12, pad: int = 8) -> list[tuple[int, int, int, int]]:
+    """台詞是置中的：每行只留中間那一團連在一起的字（字距不超過 1.5 個字高），
+    離中間太遠的白色東西（角色的白衣服、腿、景物）丟掉，不然會被認成「1」「71」之類接在台詞後面，
+    台詞一直變，就會被當成新的一句一直重念。切行方式和 _split_lines 一樣。"""
+    h, w = mask.shape
+    out = []
+    for r0, r1 in DialogueReader._runs(mask.sum(axis=1) > 2, 1):
+        if r1 - r0 + 1 < min_h:
+            continue
+        band = mask[r0:r1 + 1]  # 不含上下留白（行距小的時候留白會吃到隔壁行）
+        ch = max(8, r1 - r0 + 1)  # 大約一個字高
+        runs = DialogueReader._runs(band.any(axis=0), 1)
+        groups: list[list[int]] = []
+        for a, b in runs:
+            if groups and a - groups[-1][1] <= 1.5 * ch:
+                groups[-1][1] = b
+            else:
+                groups.append([a, b])
+        if not groups:
+            continue
+        a, b = min(groups, key=lambda g: abs((g[0] + g[1]) / 2 - w / 2))
+        if abs((a + b) / 2 - w / 2) > max(2 * ch, (b - a) * 0.15):
+            continue  # 中間沒有字：整行都是背景雜訊
+        out.append((max(0, r0 - pad), min(h, r1 + 1 + pad), max(0, a - 12), min(w, b + 13)))
+    return out
+
+
 class DialogueReader:
     def __init__(self, regions: dict, ocr_reader=None, ocr_reader_1x=None, engine: str = "rapid"):
         """engine="rapid"：主要用 RapidOCR（PaddleOCR PP-OCRv6 模型，只跑辨識），讀不到時才用 Windows OCR；
@@ -203,12 +230,15 @@ class DialogueReader:
         lines = sorted((l for l in res.result.lines if l.words), key=lambda l: min(w.top for w in l.words))
         return [_join_words(_fix_dashes(line.words)) for line in lines]
 
-    def _rapid_lines(self, img: np.ndarray, mask: np.ndarray, min_score: float = 0.5) -> list[str]:
+    def _rapid_lines(self, img: np.ndarray, mask: np.ndarray, min_score: float = 0.5,
+                     centered: bool = False) -> list[str]:
         """用字的遮罩做水平投影切出每一行（由上往下），每行裁到字的範圍再丟給 RapidOCR 辨識。
-        我們已經知道文字在哪，不用跑文字偵測（偵測要近 1 秒，只辨識一行十幾毫秒）。"""
+        我們已經知道文字在哪，不用跑文字偵測（偵測要近 1 秒，只辨識一行十幾毫秒）。
+        centered：置中的文字（台詞、黑幕旁白），只認每行中間那一團字。"""
         s = img.shape[0] / 97 if img.shape[0] < 300 else 1.0
         out = []
-        for y0, y1, x0, x1 in _split_lines(mask, min_h=max(8, int(12 * s)), pad=max(4, int(8 * s))):
+        split = _centered_lines if centered else _split_lines
+        for y0, y1, x0, x1 in split(mask, min_h=max(8, int(12 * s)), pad=max(4, int(8 * s))):
             res = self.rapid(np.ascontiguousarray(img[y0:y1, x0:x1]), use_det=False, use_cls=False)
             if res.txts and res.scores[0] >= min_score:
                 out.append(_fix_rapid(res.txts[0]))
@@ -310,7 +340,7 @@ class DialogueReader:
                 img = np.stack([np.where(mask, 0, 255).astype(np.uint8)] * 3, -1)
             else:
                 mask, img = gray >= 200, crop
-            text = clean_text("".join(self._rapid_lines(img, mask)))
+            text = clean_text("".join(self._rapid_lines(img, mask, centered=True)))
             if _CJK.search(text) or _ASCII_WORD.search(text):
                 return text
             if self._only_dots(crop):
@@ -423,7 +453,7 @@ class DialogueReader:
             return self._black_cache[1]
         text = ""
         if self.rapid:
-            text = clean_text("".join(self._rapid_lines(crop, mask)))
+            text = clean_text("".join(self._rapid_lines(crop, mask, centered=True)))
         else:
             text = clean_text("".join(self._ocr_lines(crop)))
         if not _CJK.search(text):
